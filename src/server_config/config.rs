@@ -1,12 +1,13 @@
 use crate::server_config::route::cgi::Cgi;
 pub use crate::server_config::*;
 use std::collections::HashMap;
+use std::net::TcpListener;
 
 impl<'a> ServerConfig<'a> {
     pub fn set() -> Vec<ServerConfig<'a>> {
         vec![ServerConfig {
-            host: "kek",
-            ports: vec![1000, 2000],
+            host: "localhost",
+            ports: vec![8080, 8081, 8082],
             default_error_paths: vec![
                 Path::new("/400.html"),
                 Path::new("/401.html"),
@@ -61,4 +62,21 @@ impl<'a> ServerConfig<'a> {
               server_configs
                   */
     }
+}
+
+//
+pub fn listeners() -> Vec<TcpListener> {
+    let configs = ServerConfig::set();
+    let mut listeners = Vec::new();
+    for config in configs {
+        let host = config.host;
+        for port in &config.ports {
+            listeners.push(
+                TcpListener::bind(format!("{host}:{port}"))
+                    .unwrap_or_else(|e| panic!("Error: {e}. Unable to listen to: {host}:{port}")),
+            );
+            println!("Server listening on {host}:{port}");
+        }
+    }
+    listeners
 }

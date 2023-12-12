@@ -110,6 +110,8 @@ pub mod type_aliases {
 }
 
 pub mod client {
+    pub mod handle;
+    pub use handle::*;
     pub struct Client {
         pub ip: String,
         // Add all required fields here
