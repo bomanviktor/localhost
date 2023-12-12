@@ -6,7 +6,7 @@ pub mod server_config {
 
     #[derive(Clone, Debug)]
     pub struct ServerConfig<'a> {
-        pub host: String,
+        pub host: &'a str,
         pub ports: Vec<Port>,
         pub default_error_paths: Vec<&'a Path>,
         pub body_size_limit: u128,
@@ -17,7 +17,7 @@ pub mod server_config {
         use super::*;
         #[derive(Debug)]
         pub struct ConfigBuilder<'a> {
-            pub host: Option<String>,
+            pub host: Option<&'a str>,
             pub ports: Option<Vec<Port>>,
             pub default_error_paths: Option<Vec<&'a Path>>,
             pub body_size_limit: Option<u128>,
@@ -40,8 +40,8 @@ pub mod server_config {
                 }
             }
 
-            pub fn host(&mut self, host_addr: &str) -> &mut Self {
-                self.host = Some(host_addr.to_string());
+            pub fn host(&mut self, host_addr: &'a str) -> &mut Self {
+                self.host = Some(host_addr);
                 self
             }
 
@@ -67,7 +67,7 @@ pub mod server_config {
 
             pub fn build(&self) -> ServerConfig<'a> {
                 ServerConfig {
-                    host: self.host.clone().expect("Invalid host"),
+                    host: self.host.expect("Invalid host"),
                     ports: self.ports.clone().expect("Invalid ports"),
                     default_error_paths: self.default_error_paths.clone().expect("Invalid paths"),
                     body_size_limit: self.body_size_limit.expect("Invalid size limit"),
@@ -86,7 +86,7 @@ pub mod server_config {
         #[derive(Clone, Debug)]
         pub struct Route<'a> {
             pub accepted_http_methods: Vec<http::Method>,
-            pub http_redirections: HashMap<Endpoint, Endpoint>, // From endpoint, to endpoint
+            pub http_redirections: HashMap<Endpoint<'a>, Endpoint<'a>>, // From endpoint, to endpoint
             pub default_if_url_is_dir: &'a Path,
             pub default_if_request_is_dir: &'a Path,
             pub cgi: Cgi,
@@ -106,7 +106,7 @@ pub mod server_config {
 }
 pub mod type_aliases {
     pub type Port = u16;
-    pub type Endpoint = String;
+    pub type Endpoint<'a> = &'a str;
 }
 
 pub mod client {
