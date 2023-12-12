@@ -89,17 +89,17 @@ pub mod server_config {
             pub http_redirections: HashMap<Endpoint<'a>, Endpoint<'a>>, // From endpoint, to endpoint
             pub default_if_url_is_dir: &'a Path,
             pub default_if_request_is_dir: &'a Path,
-            pub cgi: Cgi,
+            pub cgi_def: HashMap<&'a str, Cgi>,
             pub list_directory: bool,
         }
 
         pub mod cgi {
-            #[derive(Clone, Debug, Default)]
+            #[derive(Clone, Debug)]
             pub enum Cgi {
-                #[default]
                 Python,
                 PHP,
                 JavaScript,
+                Cpp,
             }
         }
     }

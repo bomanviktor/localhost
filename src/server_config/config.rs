@@ -25,7 +25,12 @@ impl<'a> ServerConfig<'a> {
                 ]),
                 default_if_url_is_dir: Path::new("some default"),
                 default_if_request_is_dir: Path::new("some other default"),
-                cgi: Cgi::PHP,
+                cgi_def: HashMap::from([
+                    (".php", Cgi::PHP),
+                    (".py", Cgi::Python),
+                    (".js", Cgi::JavaScript),
+                    (".cpp", Cgi::Cpp),
+                ]),
                 list_directory: true,
             }],
         }]
