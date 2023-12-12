@@ -1,9 +1,15 @@
 mod common;
-
-mod test_config {}
-mod test_state {
+mod test_config {
+    use localhost::server_config::ServerConfig;
     #[test]
-    fn example_test() {
-        assert_ne!(2 + 2, 5);
+    fn test_fields() {
+        let configs = ServerConfig::set();
+        for c in configs {
+            assert!(!c.host.is_empty());
+            assert!(!c.ports.is_empty());
+            assert!(!c.default_error_paths.is_empty());
+            assert!(c.body_size_limit > 0);
+            assert!(!c.routes.is_empty());
+        }
     }
 }
