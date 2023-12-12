@@ -1,3 +1,4 @@
+use crate::server_config::ServerConfig;
 use http::{Method, Request, Response, StatusCode};
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -85,7 +86,8 @@ Only shooting stars break the mold
 And all that glitters is gold
 Only shooting stars break the mold";
 
-pub fn handle_client(mut stream: TcpStream) {
+pub fn handle_client(mut stream: TcpStream, _config: &ServerConfig) {
+    //println!("{config:#?}"); // Just printing the current config
     let mut buffer = [0; 1024];
 
     // Attempt to read the stream into the buffer
@@ -129,7 +131,7 @@ pub fn handle_client(mut stream: TcpStream) {
         .body(TEMPORARY_RESPONSE.as_bytes())
         .unwrap();
 
-    if let Err(error) = stream.write_all(response.into_parts().1) {
+    if let Err(error) = stream.write_all(response.body()) {
         eprintln!("Error writing response: {error}");
     }
     //stream.write(TEMPORARY_RESPONSE.as_bytes()).expect("Something went terribly wrong.");

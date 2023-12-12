@@ -1,23 +1,31 @@
 use localhost::client::handle_client;
-use localhost::server_config::config::listeners;
-use std::net::TcpListener;
+use localhost::server::Server;
+use localhost::server_config::config::servers;
+use std::io::ErrorKind;
 
 fn main() {
-    start_server(listeners());
+    start(servers());
 }
 
 // Refactor this to its own module.
-fn start_server(listeners: Vec<TcpListener>) {
-    for listener in listeners.iter().cycle() {
-        for stream in listener.incoming() {
-            match stream {
-                Ok(stream) => handle_client(stream), // Put connection in a vector.
-                Err(e) => eprintln!("Error accepting connection: {}", e),
+fn start(mut servers: Vec<Server>) {
+    loop {
+        for server in &mut servers {
+            for listener in &mut server.listeners {
+                match listener.accept() {
+                    Ok((stream, _addr)) => handle_client(stream, &server.config),
+                    Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                        // No incoming connections, continue to the next listener
+                        continue;
+                    }
+                    Err(ref e) if e.kind() == ErrorKind::AlreadyExists => {
+                        continue;
+                    }
+                    Err(e) => eprintln!("Error accepting connection: {}", e),
+                }
             }
         }
-
-        // Loop through this vector to look for requests. Put them in a queue.
-
-        // Handle requests, starting from the first one, and send appropriate response.
+        // Sleep for a short duration to avoid busy waiting
+        std::thread::sleep(std::time::Duration::from_millis(100));
     }
 }

@@ -1,3 +1,4 @@
+use crate::server::Server;
 use crate::server_config::route::cgi::Cgi;
 pub use crate::server_config::*;
 use std::collections::HashMap;
@@ -69,19 +70,26 @@ impl<'a> ServerConfig<'a> {
     }
 }
 
-//
-pub fn listeners() -> Vec<TcpListener> {
+pub fn servers() -> Vec<Server<'static>> {
     let configs = ServerConfig::set();
-    let mut listeners = Vec::new();
+    let mut servers = Vec::new();
+
+    // Loop through all the configs
     for config in configs {
-        let host = config.host;
+        let mut listeners = Vec::new();
+        // Create a listener for each port
         for port in &config.ports {
-            listeners.push(
-                TcpListener::bind(format!("{host}:{port}"))
-                    .unwrap_or_else(|e| panic!("Error: {e}. Unable to listen to: {host}:{port}")),
-            );
-            println!("Server listening on {host}:{port}");
+            let address = format!("{}:{}", config.host, port);
+            match TcpListener::bind(&address) {
+                Ok(listener) => {
+                    listeners.push(listener);
+                    println!("Server listening on {}", address);
+                }
+                Err(e) => eprintln!("Error: {}. Unable to listen to: {}", e, address),
+            }
         }
+        // Make a server and push it to the servers vector
+        servers.push(Server::new(listeners, config))
     }
-    listeners
+    servers
 }

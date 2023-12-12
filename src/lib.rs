@@ -119,12 +119,19 @@ pub mod client {
 }
 pub mod server {
     pub use crate::client::Client;
+    use crate::server_config::ServerConfig;
     pub use crate::type_aliases::Port;
+    use std::net::TcpListener;
 
-    pub struct Server<T> {
-        pub ip_addr: String,
-        pub ports: Vec<Port>,
-        pub clients: Vec<Client>,
-        pub pending_requests: Vec<http::Request<T>>, // Add all required fields here
+    #[derive(Debug)]
+    pub struct Server<'a> {
+        pub listeners: Vec<TcpListener>,
+        pub config: ServerConfig<'a>,
+    }
+
+    impl<'a> Server<'a> {
+        pub fn new(listeners: Vec<TcpListener>, config: ServerConfig<'a>) -> Self {
+            Self { listeners, config }
+        }
     }
 }
