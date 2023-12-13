@@ -1,12 +1,12 @@
-use crate::client::{method, method_is_allowed, path, path_exists, response};
+use crate::client::{method, method_is_allowed, path, path_exists, Response};
 use crate::server_config::ServerConfig;
 use http::StatusCode;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
 pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
-    //println!("{config:#?}"); // Just printing the current config
     let mut buffer = [0; 1024];
+
     // Attempt to read the stream into the buffer
     if let Err(error) = stream.read(&mut buffer) {
         eprintln!("Error reading from stream: {}", error);
@@ -24,7 +24,6 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
 
     let mut status_code = StatusCode::OK;
     let mut path = path(&request);
-    println!("Path {:?}", path);
     let method = method(&request);
     let mut route = &config.routes[0];
 
@@ -39,31 +38,16 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
         None => status_code = StatusCode::NOT_FOUND,
     }
 
-    if status_code == StatusCode::NOT_FOUND {
-        // Error response here
-
-        // Serve the response
-        if let Err(error) = stream.write_all(&response(status_code, path, config)) {
-            eprintln!("Error writing response: {error}");
-        }
-
-        stream.flush().expect("could not flush");
-
-        return;
-    }
-
-    // Do something based on method here. Can check for server configs etc.
-    println!("{path:?}");
-
-    if !method_is_allowed(method, route) {
+    if !method_is_allowed(&method, route) {
         status_code = StatusCode::METHOD_NOT_ALLOWED;
     }
 
+    let response = Response::new(status_code, method, path, config);
+
     // Serve the response
-    if let Err(error) = stream.write_all(&response(status_code, path, config)) {
+    if let Err(error) = stream.write_all(&response.format()) {
         eprintln!("Error writing response: {error}");
     }
 
     stream.flush().expect("could not flush");
-    //stream.write(TEMPORARY_RESPONSE.as_bytes()).expect("Something went terribly wrong.");
 }

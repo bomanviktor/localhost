@@ -1,20 +1,56 @@
 use crate::server_config::ServerConfig;
-use http::StatusCode;
-use std::path::Path;
+use http::{Method, StatusCode};
+use std::fs;
 
-pub fn response(code: StatusCode, path: &Path, config: &ServerConfig) -> Vec<u8> {
-    let header = "Content-Type: text/plain";
+pub struct Response<'a> {
+    code: StatusCode,
+    method: Method,
+    path: &'a str,
+    config: &'a ServerConfig<'a>,
+}
 
-    // Replace body with the actual contents of the path
-    let body = match code {
-        StatusCode::OK => path,
-        StatusCode::PERMANENT_REDIRECT => Path::new("308 Permanent Redirect"),
-        // These are the errors.
-        _ => config.default_error_paths.get(&code).expect("get wrecked"),
-    };
+impl<'a> Response<'a> {
+    pub fn new(
+        code: StatusCode,
+        method: Method,
+        path: &'a str,
+        config: &'a ServerConfig<'a>,
+    ) -> Self {
+        Self {
+            code,
+            method,
+            path,
+            config,
+        }
+    }
+    pub fn format(&self) -> Vec<u8> {
+        let header = "Content-Type: text/html";
+        let version = "HTTP/1.1"; // Change this to get the version from the request
 
-    let version = "HTTP/1.1"; // Change this to get the version from the request
-    format!("{version} {code}\n{header}\n\n{body:?}")
-        .as_bytes()
-        .to_vec()
+        let body = match self.code {
+            StatusCode::OK => match self.method {
+                Method::GET => fs::read(self.path),
+                Method::POST => fs::read(self.path),
+                _ => fs::read(self.path),
+            },
+            StatusCode::PERMANENT_REDIRECT => fs::read(self.path),
+            // These are the errors.
+            _ => {
+                let error_path = self
+                    .config
+                    .default_error_paths
+                    .get(&self.code)
+                    .expect("get wrecked");
+                println!("{}", error_path);
+                fs::read(format!("src/default_errors{error_path}"))
+            }
+        }
+        .unwrap_or_default(); // Change this to 500 Internal server Error
+
+        let body = String::from_utf8(body).unwrap();
+
+        format!("{version} {}\n{header}\n\n{body}", self.code)
+            .as_bytes()
+            .to_vec()
+    }
 }

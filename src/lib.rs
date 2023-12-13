@@ -4,14 +4,13 @@ pub mod server_config {
     use crate::server::Port;
     use crate::server_config::route::Route;
     use std::collections::HashMap;
-    use std::path::Path;
 
     #[derive(Clone, Debug)]
     pub struct ServerConfig<'a> {
         pub host: &'a str,
         pub ports: Vec<Port>,
-        pub default_error_paths: HashMap<http::StatusCode, &'a Path>,
-        pub body_size_limit: u128,
+        pub default_error_paths: HashMap<http::StatusCode, &'a str>,
+        pub body_size_limit: usize,
         pub routes: Vec<Route<'a>>,
     }
 
@@ -21,8 +20,8 @@ pub mod server_config {
         pub struct ConfigBuilder<'a> {
             pub host: Option<&'a str>,
             pub ports: Option<Vec<Port>>,
-            pub default_error_paths: Option<HashMap<http::StatusCode, &'a Path>>,
-            pub body_size_limit: Option<u128>,
+            pub default_error_paths: Option<HashMap<http::StatusCode, &'a str>>,
+            pub body_size_limit: Option<usize>,
             pub routes: Option<Vec<Route<'a>>>,
         }
 
@@ -54,13 +53,13 @@ pub mod server_config {
 
             pub fn default_error_paths(
                 &mut self,
-                paths: HashMap<http::StatusCode, &'a Path>,
+                paths: HashMap<http::StatusCode, &'a str>,
             ) -> &mut Self {
                 self.default_error_paths = Some(paths);
                 self
             }
 
-            pub fn body_size_limit(&mut self, limit: u128) -> &mut Self {
+            pub fn body_size_limit(&mut self, limit: usize) -> &mut Self {
                 self.body_size_limit = Some(limit);
                 self
             }
@@ -85,15 +84,14 @@ pub mod server_config {
     pub mod route {
         use crate::server_config::route::cgi::Cgi;
         use std::collections::HashMap;
-        use std::path::Path;
 
         #[derive(Clone, Debug)]
         pub struct Route<'a> {
-            pub paths: Vec<&'a Path>,
+            pub paths: Vec<&'a str>,
             pub accepted_http_methods: Vec<http::Method>,
-            pub http_redirections: HashMap<&'a Path, &'a Path>, // From endpoint, to endpoint
-            pub default_if_url_is_dir: &'a Path,
-            pub default_if_request_is_dir: &'a Path,
+            pub http_redirections: HashMap<&'a str, &'a str>, // From endpoint, to endpoint
+            pub default_if_url_is_dir: &'a str,
+            pub default_if_request_is_dir: &'a str,
             pub cgi_def: HashMap<&'a str, Cgi>,
             pub list_directory: bool,
         }

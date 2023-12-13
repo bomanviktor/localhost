@@ -1,5 +1,4 @@
 use crate::server_config::route::Route;
-use std::path::Path;
 
 pub fn method(req: &str) -> http::Method {
     let method = get_line(req, 0).split_whitespace().collect::<Vec<&str>>()[0];
@@ -17,19 +16,16 @@ pub fn method(req: &str) -> http::Method {
     }
 }
 
-pub fn method_is_allowed(method: http::Method, route: &Route) -> bool {
-    route.accepted_http_methods.contains(&method)
+pub fn method_is_allowed(method: &http::Method, route: &Route) -> bool {
+    route.accepted_http_methods.contains(method)
 }
 
-pub fn path(req: &str) -> &Path {
+pub fn path(req: &str) -> &str {
     let path = get_line(req, 0).split_whitespace().collect::<Vec<&str>>()[1];
-    Path::new(path)
+    path
 }
 
-pub fn path_exists<'a>(
-    requested_path: &'a Path,
-    routes: &[Route<'a>],
-) -> Option<(usize, &'a Path)> {
+pub fn path_exists<'a>(requested_path: &'a str, routes: &[Route<'a>]) -> Option<(usize, &'a str)> {
     for (i, route) in routes.iter().enumerate() {
         for &path in &route.paths {
             // Path is contained in the route
