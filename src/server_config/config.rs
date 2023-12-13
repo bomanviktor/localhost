@@ -83,6 +83,7 @@ pub fn servers() -> Vec<Server<'static>> {
             let address = format!("{}:{}", config.host, port);
             match TcpListener::bind(&address) {
                 Ok(listener) => {
+                    listener.set_nonblocking(true).unwrap();
                     listeners.push(listener);
                     println!("Server listening on {}", address);
                 }
