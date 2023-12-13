@@ -79,7 +79,6 @@ pub mod server_config {
 
     pub mod route {
         use crate::server_config::route::cgi::Cgi;
-        use crate::type_aliases::Endpoint;
         use std::collections::HashMap;
         use std::path::Path;
 
@@ -87,7 +86,7 @@ pub mod server_config {
         pub struct Route<'a> {
             pub paths: Vec<&'a Path>,
             pub accepted_http_methods: Vec<http::Method>,
-            pub http_redirections: HashMap<Endpoint<'a>, Endpoint<'a>>, // From endpoint, to endpoint
+            pub http_redirections: HashMap<&'a Path, &'a Path>, // From endpoint, to endpoint
             pub default_if_url_is_dir: &'a Path,
             pub default_if_request_is_dir: &'a Path,
             pub cgi_def: HashMap<&'a str, Cgi>,
@@ -107,7 +106,6 @@ pub mod server_config {
 }
 pub mod type_aliases {
     pub type Port = u16;
-    pub type Endpoint<'a> = &'a str;
 }
 
 pub mod client {

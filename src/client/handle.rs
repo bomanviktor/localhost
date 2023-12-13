@@ -31,7 +31,7 @@ pub fn handle_client(mut stream: TcpStream, _config: &ServerConfig) {
     }
      */
 
-    // Handle the HTTP request
+    // Create the response
     let response = Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "text/plain")
@@ -44,8 +44,8 @@ pub fn handle_client(mut stream: TcpStream, _config: &ServerConfig) {
         response.status(),
         response.body()
     );
-    println!("response: {response}");
 
+    // Serve the response
     if let Err(error) = stream.write_all(response.as_bytes()) {
         eprintln!("Error writing response: {error}");
     }
