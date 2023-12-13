@@ -18,9 +18,6 @@ fn start(mut servers: Vec<Server>) {
                         // No incoming connections, continue to the next listener
                         continue;
                     }
-                    Err(ref e) if e.kind() == ErrorKind::AlreadyExists => {
-                        continue;
-                    }
                     Err(e) => eprintln!("Error accepting connection: {}", e),
                 }
             }

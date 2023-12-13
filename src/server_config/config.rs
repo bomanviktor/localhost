@@ -7,7 +7,7 @@ use std::net::TcpListener;
 impl<'a> ServerConfig<'a> {
     pub fn set() -> Vec<ServerConfig<'a>> {
         vec![ServerConfig {
-            host: "localhost",
+            host: "127.0.0.1",
             ports: vec![8080, 8081, 8082],
             default_error_paths: vec![
                 Path::new("/400.html"),
