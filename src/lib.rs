@@ -1,5 +1,6 @@
 pub mod server_config {
     pub mod config;
+    pub use config::*;
 
     use crate::server::Port;
     use crate::server_config::route::Route;
@@ -94,6 +95,7 @@ pub mod server_config {
             pub default_if_request_is_dir: &'a str,
             pub cgi_def: HashMap<&'a str, Cgi>,
             pub list_directory: bool,
+            pub length_required: bool,
         }
 
         pub mod cgi {
@@ -127,9 +129,12 @@ pub mod client {
     }
 }
 pub mod server {
+    use crate::client::handle_client;
     pub use crate::client::Client;
+    use crate::server_config::config::server_config;
     use crate::server_config::ServerConfig;
     pub use crate::type_aliases::Port;
+    use std::io::ErrorKind;
     use std::net::TcpListener;
 
     #[derive(Debug)]
@@ -141,6 +146,49 @@ pub mod server {
     impl<'a> Server<'a> {
         pub fn new(listeners: Vec<TcpListener>, config: ServerConfig<'a>) -> Self {
             Self { listeners, config }
+        }
+    }
+
+    pub fn servers() -> Vec<Server<'static>> {
+        let mut servers = Vec::new();
+
+        for config in server_config() {
+            let mut listeners = Vec::new();
+            for port in &config.ports {
+                // Create a listener for each port
+                let address = format!("{}:{}", config.host, port);
+                match TcpListener::bind(&address) {
+                    Ok(listener) => {
+                        listener.set_nonblocking(true).unwrap();
+                        listeners.push(listener);
+                        println!("Server listening on {}", address);
+                    }
+                    Err(e) => eprintln!("Error: {}. Unable to listen to: {}", e, address),
+                }
+            }
+            // Make a server and push it to the servers vector
+            servers.push(Server::new(listeners, config))
+        }
+        servers
+    }
+
+    // Refactor this to its own module.
+    pub fn start(mut servers: Vec<Server>) {
+        loop {
+            for server in &mut servers {
+                for listener in &mut server.listeners {
+                    match listener.accept() {
+                        Ok((stream, _addr)) => handle_client(stream, &server.config),
+                        Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                            // No incoming connections, continue to the next listener
+                            continue;
+                        }
+                        Err(e) => eprintln!("Error accepting connection: {}", e),
+                    }
+                }
+            }
+            // Sleep for a short duration to avoid busy waiting
+            std::thread::sleep(std::time::Duration::from_millis(100));
         }
     }
 }

@@ -1,9 +1,9 @@
 mod common;
 mod test_config {
-    use localhost::server_config::ServerConfig;
+    use localhost::server_config::server_config;
     #[test]
     fn test_fields() {
-        let configs = ServerConfig::set();
+        let configs = server_config();
         for c in configs {
             assert!(!c.host.is_empty());
             assert!(!c.ports.is_empty());
