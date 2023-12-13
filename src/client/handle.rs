@@ -1,10 +1,10 @@
-use crate::client::method;
+use crate::client::{method, method_is_allowed, path};
 use crate::server_config::ServerConfig;
 use http::{Response, StatusCode};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
-pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
+pub fn handle_client(mut stream: TcpStream, _config: &ServerConfig) {
     //println!("{config:#?}"); // Just printing the current config
     let mut buffer = [0; 1024];
 
@@ -24,18 +24,19 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
         }
     };
 
-    match method(&request, config) {
-        http::Method::GET => println!("Get"),
+    // Do something based on method here. Can check for server configs etc.
+    match method(&request) {
+        http::Method::GET => {}
         _ => println!("Not get"),
     }
 
-    // Do something based on request type here. Can check for server configs etc.
-    /*
-    if request.method() != Method::GET {
-        eprintln!("Invalid method."); // Will obviously be a function that does this here.
+    let method = method(&request);
+    let path = path(&request);
+    println!("{path:?}");
+
+    if !method_is_allowed(method, &[http::Method::GET]) {
         return;
     }
-     */
 
     // Create the response
     let response = Response::builder()
