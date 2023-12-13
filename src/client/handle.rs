@@ -1,9 +1,10 @@
+use crate::client::method;
 use crate::server_config::ServerConfig;
 use http::{Response, StatusCode};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
-pub fn handle_client(mut stream: TcpStream, _config: &ServerConfig) {
+pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
     //println!("{config:#?}"); // Just printing the current config
     let mut buffer = [0; 1024];
 
@@ -15,13 +16,18 @@ pub fn handle_client(mut stream: TcpStream, _config: &ServerConfig) {
 
     // Attempt to convert the buffer to a String
     // Implementation is needed to compare against available Uri
-    let _request_str = match String::from_utf8(buffer.to_vec()) {
+    let request = match String::from_utf8(buffer.to_vec()) {
         Ok(request_str) => request_str,
         Err(error) => {
             eprintln!("Error converting buffer to String: {}", error);
             return;
         }
     };
+
+    match method(&request, config) {
+        http::Method::GET => println!("Get"),
+        _ => println!("Not get"),
+    }
 
     // Do something based on request type here. Can check for server configs etc.
     /*
