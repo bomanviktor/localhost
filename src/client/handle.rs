@@ -24,7 +24,7 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
 
     let mut status_code = StatusCode::OK;
     let mut path = path(&request);
-    let method = method(&request);
+    let mut method = method(&request);
     let mut route = &config.routes[0];
 
     match path_exists(path, &config.routes) {
@@ -42,7 +42,23 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
         status_code = StatusCode::METHOD_NOT_ALLOWED;
     }
 
-    let response = Response::new(status_code, method, path, config);
+    if is_error(&status_code) {
+        method = http::Method::GET;
+    }
+
+    let response = Response::new(
+        status_code,
+        &method,
+        path,
+        config,
+        match method {
+            http::Method::POST | http::Method::PUT | http::Method::PATCH => {
+                println!("Get the bytes here!");
+                Some(vec![1, 2, 3])
+            }
+            _ => None,
+        },
+    );
 
     // Serve the response
     if let Err(error) = stream.write_all(&response.format()) {
@@ -50,4 +66,8 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
     }
 
     stream.flush().expect("could not flush");
+}
+
+fn is_error(code: &StatusCode) -> bool {
+    code.is_client_error() || code.is_server_error()
 }

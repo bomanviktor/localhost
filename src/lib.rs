@@ -109,6 +109,7 @@ pub mod server_config {
 }
 pub mod type_aliases {
     pub type Port = u16;
+    pub type Bytes = Vec<u8>;
 }
 
 pub mod client {
