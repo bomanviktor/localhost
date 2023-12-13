@@ -18,6 +18,7 @@ impl<'a> ServerConfig<'a> {
             ],
             body_size_limit: 5000,
             routes: vec![Route {
+                paths: vec![Path::new("/path1"), Path::new("/path2")],
                 accepted_http_methods: vec![http::Method::GET],
                 http_redirections: HashMap::from([
                     ("/this", "/is"),

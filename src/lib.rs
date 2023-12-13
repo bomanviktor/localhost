@@ -85,6 +85,7 @@ pub mod server_config {
 
         #[derive(Clone, Debug)]
         pub struct Route<'a> {
+            pub paths: Vec<&'a Path>,
             pub accepted_http_methods: Vec<http::Method>,
             pub http_redirections: HashMap<Endpoint<'a>, Endpoint<'a>>, // From endpoint, to endpoint
             pub default_if_url_is_dir: &'a Path,
