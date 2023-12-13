@@ -6,99 +6,35 @@ use std::net::TcpListener;
 
 impl<'a> ServerConfig<'a> {
     pub fn set() -> Vec<ServerConfig<'a>> {
-        vec![
-            ServerConfig {
-                host: "127.0.0.1",
-                ports: vec![8080, 8081, 8082],
-                default_error_paths: vec![
-                    Path::new("/400.html"),
-                    Path::new("/401.html"),
-                    Path::new("/404.html"),
-                    Path::new("/405.html"),
-                    Path::new("/500.html"),
-                ],
-                body_size_limit: 5000,
-                routes: vec![Route {
-                    paths: vec![Path::new("/path1"), Path::new("/path2")],
-                    accepted_http_methods: vec![http::Method::GET],
-                    http_redirections: HashMap::from([
-                        (Path::new("/this"), Path::new("/is")),
-                        (Path::new("/how"), Path::new("/to")),
-                        (Path::new("/redirect"), Path::new("/http")),
-                    ]),
-                    default_if_url_is_dir: Path::new("some default"),
-                    default_if_request_is_dir: Path::new("some other default"),
-                    cgi_def: HashMap::from([
-                        (".php", Cgi::PHP),
-                        (".py", Cgi::Python),
-                        (".js", Cgi::JavaScript),
-                        (".cpp", Cgi::Cpp),
-                    ]),
-                    list_directory: true,
-                }],
-            },
-            ServerConfig {
-                host: "0.0.0.0",
-                ports: vec![8000, 8001, 8002],
-                default_error_paths: vec![
-                    Path::new("/400.html"),
-                    Path::new("/401.html"),
-                    Path::new("/404.html"),
-                    Path::new("/405.html"),
-                    Path::new("/500.html"),
-                ],
-                body_size_limit: 5000,
-                routes: vec![Route {
-                    paths: vec![Path::new("/path3"), Path::new("/path4")],
-                    accepted_http_methods: vec![http::Method::GET],
-                    http_redirections: HashMap::from([
-                        (Path::new("/redirect"), Path::new("/url")),
-                        (Path::new("/from"), Path::new("/to")),
-                    ]),
-                    default_if_url_is_dir: Path::new("some default"),
-                    default_if_request_is_dir: Path::new("some other default"),
-                    cgi_def: HashMap::from([
-                        (".php", Cgi::PHP),
-                        (".py", Cgi::Python),
-                        (".js", Cgi::JavaScript),
-                        (".cpp", Cgi::Cpp),
-                    ]),
-                    list_directory: true,
-                }],
-            },
-        ]
-
-        /*
-
-        let mut server_configs = Vec::new();
-              let config = ConfigBuilder::new()
-                  .host("test")
-                  .ports(vec![1000, 2000])
-                  .default_error_paths(vec![
-                      Path::new("/400.html"),
-                      Path::new("/401.html"),
-                      Path::new("/404.html"),
-                      Path::new("/405.html"),
-                      Path::new("/500.html"),
-                  ])
-                  .body_size_limit(5000) // Bytes
-                  .routes( vec![Route {
-                      accepted_http_methods: vec![http::Method::GET],
-                      http_redirections: HashMap::from([
-                          ("/this", "/is"),
-                          ("/how", "/to"),
-                          ("/redirect", "/http"),
-                      ]),
-                      default_if_url_is_dir: Path::new("some default"),
-                      default_if_request_is_dir: Path::new("some other default"),
-                      cgi: Cgi::PHP,
-                      list_directory: true,
-                  }]) // Insert routes here
-                  .build();
-              server_configs.push(config);
-
-              server_configs
-                  */
+        vec![ServerConfig {
+            host: "127.0.0.1",
+            ports: vec![8080, 8081, 8082],
+            default_error_paths: vec![
+                Path::new("/400.html"),
+                Path::new("/401.html"),
+                Path::new("/404.html"),
+                Path::new("/405.html"),
+                Path::new("/500.html"),
+            ],
+            body_size_limit: 1024,
+            routes: vec![Route {
+                paths: vec![Path::new("/path1"), Path::new("/path2")],
+                accepted_http_methods: vec![http::Method::GET],
+                http_redirections: HashMap::from([
+                    (Path::new("/test1"), Path::new("/path1")),
+                    (Path::new("/test2"), Path::new("/path2")),
+                ]),
+                default_if_url_is_dir: Path::new("some default"),
+                default_if_request_is_dir: Path::new("some other default"),
+                cgi_def: HashMap::from([
+                    (".php", Cgi::PHP),
+                    (".py", Cgi::Python),
+                    (".js", Cgi::JavaScript),
+                    (".cpp", Cgi::Cpp),
+                ]),
+                list_directory: true,
+            }],
+        }]
     }
 }
 
