@@ -1,6 +1,7 @@
 use crate::server::Server;
 use crate::server_config::route::cgi::Cgi;
 pub use crate::server_config::*;
+use http::StatusCode;
 use std::collections::HashMap;
 use std::net::TcpListener;
 
@@ -9,13 +10,12 @@ impl<'a> ServerConfig<'a> {
         vec![ServerConfig {
             host: "127.0.0.1",
             ports: vec![8080, 8081, 8082],
-            default_error_paths: vec![
-                Path::new("/400.html"),
-                Path::new("/401.html"),
-                Path::new("/404.html"),
-                Path::new("/405.html"),
-                Path::new("/500.html"),
-            ],
+            default_error_paths: HashMap::from([
+                (StatusCode::BAD_REQUEST, Path::new("/400.html")),
+                (StatusCode::NOT_FOUND, Path::new("/404.html")),
+                (StatusCode::METHOD_NOT_ALLOWED, Path::new("/405.html")),
+                (StatusCode::INTERNAL_SERVER_ERROR, Path::new("/500.html")),
+            ]),
             body_size_limit: 1024,
             routes: vec![Route {
                 paths: vec![Path::new("/path1"), Path::new("/path2")],

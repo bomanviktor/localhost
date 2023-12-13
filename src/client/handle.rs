@@ -1,6 +1,6 @@
-use crate::client::{method, method_is_allowed, path, path_exists};
+use crate::client::{method, method_is_allowed, path, path_exists, response};
 use crate::server_config::ServerConfig;
-use http::{Response, StatusCode};
+use http::StatusCode;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
@@ -26,11 +26,11 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
     let mut path = path(&request);
     println!("Path {:?}", path);
     let method = method(&request);
-    let mut route_index = 0;
+    let mut route = &config.routes[0];
 
     match path_exists(path, &config.routes) {
-        Some((index, sanitized_path)) => {
-            route_index = index; // Set the route index to pass on the correct information.
+        Some((i, sanitized_path)) => {
+            route = &config.routes[i]; // Set the route index to pass on the correct information.
             if sanitized_path != path {
                 path = sanitized_path; // Redirect the path
                 status_code = StatusCode::PERMANENT_REDIRECT;
@@ -41,20 +41,9 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
 
     if status_code == StatusCode::NOT_FOUND {
         // Error response here
-        let response = Response::builder()
-            .status(status_code)
-            .header("Content-Type", "text/plain")
-            .body("404 not found")
-            .unwrap();
 
-        let response = format!(
-            "{:?} {}\nContent-Type: text/plain\n\n{}",
-            response.version(),
-            response.status(),
-            response.body()
-        );
         // Serve the response
-        if let Err(error) = stream.write_all(response.as_bytes()) {
+        if let Err(error) = stream.write_all(&response(status_code, path, config)) {
             eprintln!("Error writing response: {error}");
         }
 
@@ -66,26 +55,12 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
     // Do something based on method here. Can check for server configs etc.
     println!("{path:?}");
 
-    if !method_is_allowed(method, &config.routes[route_index]) {
+    if !method_is_allowed(method, route) {
         status_code = StatusCode::METHOD_NOT_ALLOWED;
     }
 
-    // Create the response
-    let response = Response::builder()
-        .status(status_code)
-        .header("Content-Type", "text/plain")
-        .body("Hello world")
-        .unwrap();
-
-    let response = format!(
-        "{:?} {}\nContent-Type: text/plain\n\n{}",
-        response.version(),
-        response.status(),
-        response.body()
-    );
-
     // Serve the response
-    if let Err(error) = stream.write_all(response.as_bytes()) {
+    if let Err(error) = stream.write_all(&response(status_code, path, config)) {
         eprintln!("Error writing response: {error}");
     }
 

@@ -1,14 +1,16 @@
 pub mod server_config {
     pub mod config;
+
     use crate::server::Port;
     use crate::server_config::route::Route;
+    use std::collections::HashMap;
     use std::path::Path;
 
     #[derive(Clone, Debug)]
     pub struct ServerConfig<'a> {
         pub host: &'a str,
         pub ports: Vec<Port>,
-        pub default_error_paths: Vec<&'a Path>,
+        pub default_error_paths: HashMap<http::StatusCode, &'a Path>,
         pub body_size_limit: u128,
         pub routes: Vec<Route<'a>>,
     }
@@ -19,7 +21,7 @@ pub mod server_config {
         pub struct ConfigBuilder<'a> {
             pub host: Option<&'a str>,
             pub ports: Option<Vec<Port>>,
-            pub default_error_paths: Option<Vec<&'a Path>>,
+            pub default_error_paths: Option<HashMap<http::StatusCode, &'a Path>>,
             pub body_size_limit: Option<u128>,
             pub routes: Option<Vec<Route<'a>>>,
         }
@@ -50,7 +52,10 @@ pub mod server_config {
                 self
             }
 
-            pub fn default_error_paths(&mut self, paths: Vec<&'a Path>) -> &mut Self {
+            pub fn default_error_paths(
+                &mut self,
+                paths: HashMap<http::StatusCode, &'a Path>,
+            ) -> &mut Self {
                 self.default_error_paths = Some(paths);
                 self
             }
@@ -114,6 +119,9 @@ pub mod client {
 
     pub mod requests;
     pub use requests::*;
+
+    pub mod responses;
+    pub use responses::*;
     pub struct Client {
         pub ip: String,
         // Add all required fields here
