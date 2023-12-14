@@ -4,18 +4,87 @@ use http::Method;
 use std::str::FromStr;
 
 pub mod method {
+    use std::fs;
+    use http::method::InvalidMethod;
+    use crate::type_aliases::Bytes;
     use super::*;
-    pub fn method(req: &str) -> Method {
-        // Should probably return Result here.
+    pub fn method(req: &str) -> Result<Method, InvalidMethod> {
         let line = get_line(req, 0);
         let method = get_split_index(line, 0);
         // "GET /path2 HTTP/1.1" -> "GET"
-
-        Method::from_str(method).unwrap_or(Method::GET)
+        Method::from_str(method)
     }
 
     pub fn method_is_allowed(method: &Method, route: &Route) -> bool {
         route.accepted_http_methods.contains(method)
+    }
+
+    fn handle_method(path: &str, request: http::Request<()>) -> Option<Bytes> {
+        match *request.method() {
+            Method::GET => Some(get(path).unwrap_or_default()),
+            Method::HEAD => None,
+            Method::POST => {
+                post(path, request.body() as Bytes).unwrap_or_default();
+                None
+            }
+            Method::PUT => {
+                put(path, request.body() as Bytes).unwrap_or_default();
+                None
+            }
+            Method::PATCH => {
+                patch(path, request.body() as Bytes).unwrap_or_default();
+                None
+            }
+            Method::DELETE => {
+                delete(path).unwrap_or_default();
+                None
+            }
+            _ => Some(get(path).unwrap()),
+        }
+    }
+
+    pub fn get(path: &str) -> std::io::Result<Bytes> {
+        fs::read(path)
+    }
+
+    pub fn post(path: &str, bytes: Bytes) -> std::io::Result<()> {
+        // Resource does not exist, so create it.
+        if fs::metadata(path).is_err() {
+            return fs::write(path, bytes);
+        }
+
+        let mut path = String::from(path); // Turn the path into String
+        let end = path.rfind('.').unwrap_or(path.len());
+        let mut i = 1;
+
+        // If the file already exists, modify the path.
+        // /foo.txt -> /foo(1).txt
+        while fs::metadata(&path).is_ok() {
+            path.truncate(end);
+            path.push_str(&format!("({})", i));
+            path.push_str(&path[end..]);
+            i += 1;
+        }
+
+        fs::write(&path, bytes)
+    }
+
+    pub fn put(path: &str, bytes: Bytes) -> std::io::Result<()> {
+        fs::write(path, bytes)
+    }
+
+    pub fn patch(path: &str, bytes: Bytes) -> std::io::Result<()> {
+        match fs::metadata(path) {
+            Ok(_) => fs::write(path, bytes),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn delete(path: &str) -> std::io::Result<()> {
+        match fs::remove_file(path) {
+            Ok(_) => Ok(()),                         // Target was a file
+            Err(_) => fs::remove_dir_all(path), // Target was a directory
+        }
     }
 }
 
@@ -99,7 +168,12 @@ pub mod headers {
 pub mod utils {
     /// `get_split_index` gets the `&str` at `index` after performing `split_whitespace`
     pub fn get_split_index(s: &str, index: usize) -> &str {
-        s.split_whitespace().collect::<Vec<&str>>()[index]
+        let lines = s.split_whitespace().collect::<Vec<&str>>();
+        if index > lines.len() {
+            lines[0]
+        } else {
+            lines[index]
+        }
     }
 
     /// `get_line` gets the `&str` at `index` after performing `split('\n')`
