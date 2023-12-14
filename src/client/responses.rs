@@ -126,7 +126,7 @@ mod request_method {
 
         pub fn post(&self) -> std::io::Result<()> {
             // Resource does not exist, so create it.
-            if fs::read(self.path).is_err() {
+            if fs::metadata(self.path).is_err() {
                 return fs::write(self.path, self.bytes.clone().unwrap());
             }
 
