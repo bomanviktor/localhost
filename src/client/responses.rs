@@ -1,9 +1,10 @@
 use crate::server_config::ServerConfig;
 use crate::type_aliases::Bytes;
-use http::{Method, StatusCode};
+use http::{HeaderMap, Method, StatusCode};
 use std::fs;
 
 pub struct Response<'a> {
+    header: HeaderMap,
     code: StatusCode,
     method: Method,
     path: &'a str,
@@ -13,6 +14,7 @@ pub struct Response<'a> {
 
 impl<'a> Response<'a> {
     pub fn new(
+        header: HeaderMap,
         code: StatusCode,
         method: &Method,
         path: &'a str,
@@ -20,6 +22,7 @@ impl<'a> Response<'a> {
         bytes: Option<Bytes>,
     ) -> Self {
         Self {
+            header,
             code,
             method: method.clone(),
             path,
@@ -28,8 +31,10 @@ impl<'a> Response<'a> {
         }
     }
     pub fn format(&self) -> Bytes {
-        let header = "Content-Type: text/html";
+        println!("{:?}", self.header);
+        let content_type = self.content_type();
         let version = "HTTP/1.1"; // Change this to get the version from the request
+        let code = self.code;
 
         let body = match self.code {
             StatusCode::OK | StatusCode::PERMANENT_REDIRECT => self.check_method(),
@@ -38,14 +43,44 @@ impl<'a> Response<'a> {
 
         if let Some(body) = body {
             let body = String::from_utf8(body).unwrap();
-            format!("{version} {}\n{header}\n\n{body}", self.code)
+            format!("{version} {code}\n{content_type}\n\n{body}")
                 .as_bytes()
                 .to_vec()
         } else {
-            format!("{version} {}\n{header}", self.code)
+            format!("{version} {code}\n{content_type}")
                 .as_bytes()
                 .to_vec()
         }
+    }
+
+    fn content_type(&self) -> String {
+        let file_extension = self.path.split('.').rev().collect::<Vec<&str>>()[0];
+        // "/test.html" -> "html"
+
+        format!(
+            "Content-Type: {}",
+            match file_extension {
+                // Text
+                "html" => "text/html",
+                "css" => "text/css",
+                "js" => "text/javascript",
+                // Message
+                "http" => "message/http",
+                // Image
+                "jpeg" | "jpg" => "image/jpeg",
+                "png" => "image/png",
+                "gif" => "image/gif",
+                "bmp" => "image/bmp",
+                "example" => "image/example",
+                // Audio
+                "aac" => "audio/aac",
+                "eac3" => "audio/eac3",
+                // Application
+                "json" => "application/json",
+                "awt" => "application/jwt",
+                _ => "text/html",
+            }
+        )
     }
     fn check_method(&self) -> Option<Bytes> {
         match self.method {
