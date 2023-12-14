@@ -2,6 +2,8 @@ use crate::server_config::route::Route;
 
 pub fn method(req: &str) -> http::Method {
     let method = get_line(req, 0).split_whitespace().collect::<Vec<&str>>()[0];
+    // "GET /path2 HTTP/1.1" -> "GET"
+
     match method {
         "GET" => http::Method::GET,
         "HEAD" => http::Method::HEAD,
@@ -22,6 +24,7 @@ pub fn method_is_allowed(method: &http::Method, route: &Route) -> bool {
 
 pub fn path(req: &str) -> &str {
     let path = get_line(req, 0).split_whitespace().collect::<Vec<&str>>()[1];
+    // "GET /path HTTP/1.1" -> "/path"
     path
 }
 
@@ -39,8 +42,7 @@ pub fn path_exists<'a>(requested_path: &'a str, routes: &[Route<'a>]) -> Option<
             }
         }
     }
-    // Path does not exist in allowed paths or in redirections
-    None
+    None // Path does not exist in allowed paths or in redirections
 }
 
 fn get_line(req: &str, line: usize) -> &str {

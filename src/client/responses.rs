@@ -47,7 +47,6 @@ impl<'a> Response<'a> {
                 .to_vec()
         }
     }
-
     fn check_method(&self) -> Option<Bytes> {
         match self.method {
             Method::GET => Some(self.get().unwrap_or_default()),
@@ -81,44 +80,53 @@ impl<'a> Response<'a> {
 
         fs::read(format!("src/default_errors{error_path}"))
     }
-    fn get(&self) -> std::io::Result<Bytes> {
-        fs::read(self.path)
-    }
+}
 
-    fn post(&self) -> std::io::Result<()> {
-        // Resource does not exist, so create it.
-        if fs::read(self.path).is_err() {
-            return fs::write(self.path, self.bytes.clone().unwrap());
+mod request_method {
+    use super::*;
+    impl<'a> Response<'a> {
+        pub fn get(&self) -> std::io::Result<Bytes> {
+            fs::read(self.path)
         }
 
-        let mut path = String::from(self.path); // Clone the original path to avoid modifying it directly.
-        let end = path.rfind('.').unwrap_or(path.len());
-        let mut i = 1;
+        pub fn post(&self) -> std::io::Result<()> {
+            // Resource does not exist, so create it.
+            if fs::read(self.path).is_err() {
+                return fs::write(self.path, self.bytes.clone().unwrap());
+            }
 
-        // If the file already exists, modify the path.
-        // /foo.txt -> /foo(1).txt
-        while fs::metadata(&path).is_ok() {
-            path.truncate(end);
-            path.push_str(&format!("({})", i));
-            path.push_str(&self.path[end..]);
-            i += 1;
+            let mut path = String::from(self.path); // Turn the path into String
+            let end = path.rfind('.').unwrap_or(path.len());
+            let mut i = 1;
+
+            // If the file already exists, modify the path.
+            // /foo.txt -> /foo(1).txt
+            while fs::metadata(&path).is_ok() {
+                path.truncate(end);
+                path.push_str(&format!("({})", i));
+                path.push_str(&self.path[end..]);
+                i += 1;
+            }
+
+            fs::write(&path, self.bytes.clone().unwrap())
         }
 
-        fs::write(&path, self.bytes.clone().unwrap())
-    }
+        pub fn put(&self) -> std::io::Result<()> {
+            fs::write(self.path, self.bytes.clone().unwrap())
+        }
 
-    fn put(&self) -> std::io::Result<()> {
-        fs::write(self.path, self.bytes.clone().unwrap())
-    }
+        pub fn patch(&self) -> std::io::Result<()> {
+            match fs::metadata(self.path) {
+                Ok(_) => fs::write(self.path, self.bytes.clone().unwrap()),
+                Err(e) => Err(e),
+            }
+        }
 
-    fn patch(&self) -> std::io::Result<()> {
-        fs::write(self.path, self.bytes.clone().unwrap())
-    }
-
-    fn delete(&self) -> std::io::Result<()> {
-        match fs::remove_file(self.path) {
-            Ok(_) => Ok(()),
-            Err(_) => fs::remove_file(self.path),
+        pub fn delete(&self) -> std::io::Result<()> {
+            match fs::remove_file(self.path) {
+                Ok(_) => Ok(()),
+                Err(_) => fs::remove_file(self.path),
+            }
         }
     }
 }
