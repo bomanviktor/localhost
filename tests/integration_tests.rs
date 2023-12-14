@@ -22,20 +22,11 @@ mod test_requests {
     use std::thread;
     mod utils {
         use super::*;
+        use localhost::client::utils::get_split_index;
+        use std::str::FromStr;
         pub fn get_status(header: &str) -> StatusCode {
-            let status = header.split_whitespace().collect::<Vec<&str>>()[1];
-            match status {
-                "200" => StatusCode::OK,
-                "308" => StatusCode::PERMANENT_REDIRECT,
-                "400" => StatusCode::BAD_REQUEST,
-                "401" => StatusCode::UNAUTHORIZED,
-                "403" => StatusCode::FORBIDDEN,
-                "404" => StatusCode::NOT_FOUND,
-                "405" => StatusCode::METHOD_NOT_ALLOWED,
-                "411" => StatusCode::LENGTH_REQUIRED,
-                "413" => StatusCode::PAYLOAD_TOO_LARGE,
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
-            }
+            let status = get_split_index(header, 1);
+            StatusCode::from_str(status).unwrap_or(StatusCode::OK)
         }
     }
     mod valid {
