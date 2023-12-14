@@ -159,8 +159,8 @@ mod request_method {
 
         pub fn delete(&self) -> std::io::Result<()> {
             match fs::remove_file(self.path) {
-                Ok(_) => Ok(()),
-                Err(_) => fs::remove_file(self.path),
+                Ok(_) => Ok(()),                         // Target was a file
+                Err(_) => fs::remove_dir_all(self.path), // Target was a directory
             }
         }
     }
