@@ -308,5 +308,107 @@ pub mod client_errors {
 }
 
 pub mod server_errors {
+    pub mod server_errors {
+        use http::header::HOST;
+        use http::StatusCode;
 
+        /// Returns a 500 Internal Server Error response.
+        pub fn internal_server_error(host: &str) -> http::Response<()> {
+            http::Response::builder()
+                .header(HOST, host.parse().unwrap())
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(())
+                .unwrap()
+        }
+
+        /// Returns a 501 Not Implemented response.
+        pub fn not_implemented(host: &str) -> http::Response<()> {
+            http::Response::builder()
+                .header(HOST, host.parse().unwrap())
+                .status(StatusCode::NOT_IMPLEMENTED)
+                .body(())
+                .unwrap()
+        }
+
+        /// Returns a 502 Bad Gateway response.
+        pub fn bad_gateway(host: &str) -> http::Response<()> {
+            http::Response::builder()
+                .header(HOST, host.parse().unwrap())
+                .status(StatusCode::BAD_GATEWAY)
+                .body(())
+                .unwrap()
+        }
+
+        /// Returns a 503 Service Unavailable response.
+        pub fn service_unavailable(host: &str) -> http::Response<()> {
+            http::Response::builder()
+                .header(HOST, host.parse().unwrap())
+                .status(StatusCode::SERVICE_UNAVAILABLE)
+                .body(())
+                .unwrap()
+        }
+
+        /// Returns a 504 Gateway Timeout response.
+        pub fn gateway_timeout(host: &str) -> http::Response<()> {
+            http::Response::builder()
+                .header(HOST, host.parse().unwrap())
+                .status(StatusCode::GATEWAY_TIMEOUT)
+                .body(())
+                .unwrap()
+        }
+
+        /// Returns a 505 HTTP Version Not Supported response.
+        pub fn http_version_not_supported(host: &str) -> http::Response<()> {
+            http::Response::builder()
+                .header(HOST, host.parse().unwrap())
+                .status(StatusCode::HTTP_VERSION_NOT_SUPPORTED)
+                .body(())
+                .unwrap()
+        }
+
+        /// Returns a 506 Variant Also Negotiates response.
+        pub fn variant_also_negotiates(host: &str) -> http::Response<()> {
+            http::Response::builder()
+                .header(HOST, host.parse().unwrap())
+                .status(StatusCode::VARIANT_ALSO_NEGOTIATES)
+                .body(())
+                .unwrap()
+        }
+
+        /// Returns a 507 Insufficient Storage response.
+        pub fn insufficient_storage(host: &str) -> http::Response<()> {
+            http::Response::builder()
+                .header(HOST, host.parse().unwrap())
+                .status(StatusCode::INSUFFICIENT_STORAGE)
+                .body(())
+                .unwrap()
+        }
+
+        /// Returns a 508 Loop Detected response.
+        pub fn loop_detected(host: &str) -> http::Response<()> {
+            http::Response::builder()
+                .header(HOST, host.parse().unwrap())
+                .status(StatusCode::LOOP_DETECTED)
+                .body(())
+                .unwrap()
+        }
+
+        /// Returns a 510 Not Extended response.
+        pub fn not_extended(host: &str) -> http::Response<()> {
+            http::Response::builder()
+                .header(HOST, host.parse().unwrap())
+                .status(StatusCode::NOT_EXTENDED)
+                .body(())
+                .unwrap()
+        }
+
+        /// Returns a 511 Network Authentication Required response.
+        pub fn network_authentication_required(host: &str) -> http::Response<()> {
+            http::Response::builder()
+                .header(HOST, host.parse().unwrap())
+                .status(StatusCode::NETWORK_AUTHENTICATION_REQUIRED)
+                .body(())
+                .unwrap()
+        }
+    }
 }
