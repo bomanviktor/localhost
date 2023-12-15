@@ -91,10 +91,11 @@ pub mod server_config {
             pub paths: Vec<&'a str>,
             pub accepted_http_methods: Vec<http::Method>,
             pub http_redirections: HashMap<&'a str, &'a str>, // From endpoint, to endpoint
-            pub default_if_url_is_dir: &'a str,
-            pub default_if_request_is_dir: &'a str,
+            pub redirect_status_code: http::StatusCode,       // TODO: Implement
+            pub default_if_url_is_dir: &'a str,               // TODO: Implement
+            pub default_if_request_is_dir: &'a str,           // TODO: Implement
             pub cgi_def: HashMap<&'a str, Cgi>,
-            pub list_directory: bool,
+            pub list_directory: bool, // TODO: Implement
             pub length_required: bool,
         }
 
@@ -123,14 +124,9 @@ pub mod client {
 
     pub mod responses;
     pub use responses::*;
-    pub struct Client {
-        pub ip: String,
-        // Add all required fields here
-    }
 }
 pub mod server {
     use crate::client::handle_client;
-    pub use crate::client::Client;
     use crate::server_config::config::server_config;
     use crate::server_config::ServerConfig;
     pub use crate::type_aliases::Port;
