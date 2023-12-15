@@ -4,7 +4,7 @@ use crate::client::errors::client_errors::{
 use crate::client::headers::{get_content_length, get_content_type};
 use crate::client::method::{handle_method, method, method_is_allowed};
 use crate::client::path::{path, path_exists};
-use crate::client::redirections::temporary_redirect;
+use crate::client::redirections::*;
 use crate::client::utils::to_bytes;
 use crate::client::{content_type, format};
 use crate::server_config::ServerConfig;
@@ -50,7 +50,10 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
         route = &config.routes[i]; // Set the route index to pass on the correct information.
         if sanitized_path != path {
             // TODO: Implementation for route.default_redirect_method
-            serve_response(stream, temporary_redirect(config.host, path, version));
+            serve_response(
+                stream,
+                moved_permanently(config.host, sanitized_path, version),
+            );
             return;
         }
     } else {
