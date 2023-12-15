@@ -1,10 +1,16 @@
+use crate::client::errors::client_errors::{
+    bad_request, length_required, method_not_allowed, not_found, payload_too_large,
+};
 use crate::client::headers::{get_content_length, get_content_type};
-use crate::client::method::{method, method_is_allowed};
+use crate::client::method::{handle_method, method, method_is_allowed};
 use crate::client::path::{path, path_exists};
-use crate::client::Response;
+use crate::client::redirections::temporary_redirect;
+use crate::client::utils::to_bytes;
+use crate::client::{content_type, format};
 use crate::server_config::ServerConfig;
-use http::header::{CONTENT_LENGTH, CONTENT_TYPE, HOST, LOCATION};
-use http::{HeaderMap, Method, StatusCode};
+use http::header::{CONTENT_LENGTH, CONTENT_TYPE, HOST};
+use http::{Method, Response, StatusCode, Version};
+use std::fmt::Display;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
@@ -20,7 +26,7 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
     }
 
     // Attempt to convert the buffer to a String
-    let request = match String::from_utf8(buffer.to_vec()) {
+    let request_str = match String::from_utf8(buffer.to_vec()) {
         Ok(request_str) => request_str,
         Err(error) => {
             eprintln!("Error converting buffer to String: {}", error);
@@ -28,77 +34,116 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
         }
     };
 
-    let mut resp_header = HeaderMap::new();
-    resp_header.insert(HOST, config.host.parse().unwrap());
-
-    let mut status_code = StatusCode::OK;
-    let mut path = path(&request);
-    let mut method = method(&request);
-    let mut route = &config.routes[0];
-
-    match path_exists(path, &config.routes) {
-        Some((i, sanitized_path)) => {
-            route = &config.routes[i]; // Set the route index to pass on the correct information.
-            if sanitized_path != path {
-                resp_header.insert(LOCATION, sanitized_path.parse().unwrap()); // Add the redirected path to the header
-                path = sanitized_path; // Redirect the path
-                status_code = StatusCode::PERMANENT_REDIRECT; // TODO: Make it possible to choose appropriate status code
-            }
+    let version = get_version(&request_str);
+    let path = path(&request_str);
+    let method = match method(&request_str) {
+        Ok(method) => method,
+        Err(_) => {
+            serve_response(stream, method_not_allowed(config, version));
+            return;
         }
-        None => status_code = StatusCode::NOT_FOUND,
+    };
+
+    #[allow(unused_assignments)]
+    let mut route = &config.routes[0];
+    if let Some((i, sanitized_path)) = path_exists(path, &config.routes) {
+        route = &config.routes[i]; // Set the route index to pass on the correct information.
+        if sanitized_path != path {
+            // TODO: Implementation for route.default_redirect_method
+            serve_response(stream, temporary_redirect(config.host, path, version));
+            return;
+        }
+    } else {
+        serve_response(stream, not_found(config, version));
+        return;
     }
 
     if !method_is_allowed(&method, route) {
-        status_code = StatusCode::METHOD_NOT_ALLOWED;
+        serve_response(stream, method_not_allowed(config, version));
+        return;
     }
 
-    // Status Code is an error. Change the method to `GET` to send the error page
-    if is_error(&status_code) {
-        method = Method::GET;
-    }
+    let mut resp = Response::builder()
+        .version(version)
+        .header(HOST, config.host)
+        .status(StatusCode::OK);
 
-    // Content-Length
-    if let Some(length) = get_content_length(&request) {
-        resp_header.insert(CONTENT_LENGTH, length.parse().unwrap());
-    }
-
-    if route.length_required                              // Content-Length is required
-        && resp_header.get(CONTENT_LENGTH).is_none() // Content-Length is absent
-        && STATE_CHANGING_METHODS.contains(&method)
-    // The method changes the server state
-    {
-        status_code = StatusCode::LENGTH_REQUIRED;
-    }
-
-    // Content-Type for server-changing requests
+    // State changing http methods
     if STATE_CHANGING_METHODS.contains(&method) {
-        if let Some(content_type) = get_content_type(&request) {
-            resp_header.insert(CONTENT_TYPE, content_type.parse().unwrap());
-        }
-    }
-
-    let response = Response::new(
-        resp_header,
-        status_code,
-        &method,
-        path,
-        config,
-        if STATE_CHANGING_METHODS.contains(&method) {
-            println!("Get the bytes here!");
-            Some(vec![1, 2, 3])
+        if let Some(content_type) = get_content_type(&request_str) {
+            resp = resp.header(CONTENT_TYPE, content_type);
         } else {
-            None
-        },
-    );
+            serve_response(stream, bad_request(config, version)); // Respond with bad request if state changing method but no content type
+            return;
+        }
 
-    // Serve the response
-    if let Err(error) = stream.write_all(&response.format()) {
-        eprintln!("Error writing response: {error}");
+        let mut content_length = false;
+        if let Some(length) = get_content_length(&request_str) {
+            resp = resp.header(CONTENT_LENGTH, length);
+            content_length = true;
+        }
+
+        // Requires a length, has no length, and is a
+        if route.length_required && !content_length {
+            serve_response(stream, length_required(config, version));
+            return;
+        }
+
+        if let Some(resp_body) = get_body(&request_str, config.body_size_limit) {
+            handle_method(path, method, Some(to_bytes(resp_body))); // do stuff to server
+            let resp = resp.body(resp_body).unwrap();
+            serve_response(stream, resp);
+        } else {
+            serve_response(stream, payload_too_large(config, version));
+        }
+        return;
     }
 
-    stream.flush().expect("could not flush");
+    let body = handle_method(path, method, None);
+    let resp = resp
+        .version(version)
+        .header(CONTENT_TYPE, content_type(&request_str))
+        .status(StatusCode::OK)
+        .body(String::from_utf8(body.unwrap_or_default()).unwrap())
+        .unwrap();
+
+    serve_response(stream, resp)
 }
 
-fn is_error(code: &StatusCode) -> bool {
-    code.is_client_error() || code.is_server_error()
+fn get_version(req: &str) -> Version {
+    let version_str = req
+        .split_whitespace()
+        .find(|s| s.contains("HTTP/"))
+        .unwrap_or("HTTP/1.1");
+
+    match version_str {
+        "HTTP/0.9" => Version::HTTP_09,
+        "HTTP/1.0" => Version::HTTP_10,
+        "HTTP/1.1" => Version::HTTP_11,
+        "HTTP/2.0" => Version::HTTP_2,
+        "HTTP/3.0" => Version::HTTP_3,
+        _ => Version::HTTP_11,
+    }
+}
+
+fn get_body(req: &str, limit: usize) -> Option<&str> {
+    let binding = req
+        .trim_end_matches('\0')
+        .split("\n\n")
+        .collect::<Vec<&str>>();
+
+    let body = *binding.last().unwrap_or(&"");
+
+    if body.len() <= limit {
+        Some(body)
+    } else {
+        None
+    }
+}
+
+fn serve_response<T: Display>(mut stream: TcpStream, response: Response<T>) {
+    if let Err(error) = stream.write_all(&format(response)) {
+        eprintln!("Error writing response: {error}");
+    }
+    stream.flush().expect("could not flush");
 }

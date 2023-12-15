@@ -4,10 +4,11 @@ use http::Method;
 use std::str::FromStr;
 
 pub mod method {
-    use std::fs;
-    use http::method::InvalidMethod;
+    use super::{get_line, get_split_index, FromStr, Method, Route};
     use crate::type_aliases::Bytes;
-    use super::*;
+    use http::method::InvalidMethod;
+    use std::fs;
+
     pub fn method(req: &str) -> Result<Method, InvalidMethod> {
         let line = get_line(req, 0);
         let method = get_split_index(line, 0);
@@ -19,20 +20,20 @@ pub mod method {
         route.accepted_http_methods.contains(method)
     }
 
-    fn handle_method(path: &str, request: http::Request<()>) -> Option<Bytes> {
-        match *request.method() {
+    pub fn handle_method(path: &str, method: Method, body: Option<Bytes>) -> Option<Bytes> {
+        match method {
             Method::GET => Some(get(path).unwrap_or_default()),
             Method::HEAD => None,
             Method::POST => {
-                post(path, request.body() as Bytes).unwrap_or_default();
+                post(path, body.unwrap()).unwrap_or_default();
                 None
             }
             Method::PUT => {
-                put(path, request.body() as Bytes).unwrap_or_default();
+                put(path, body.unwrap()).unwrap_or_default();
                 None
             }
             Method::PATCH => {
-                patch(path, request.body() as Bytes).unwrap_or_default();
+                patch(path, body.unwrap()).unwrap_or_default();
                 None
             }
             Method::DELETE => {
@@ -62,7 +63,7 @@ pub mod method {
         while fs::metadata(&path).is_ok() {
             path.truncate(end);
             path.push_str(&format!("({})", i));
-            path.push_str(&path[end..]);
+            path.push_str(&path.clone()[end..]);
             i += 1;
         }
 
@@ -82,7 +83,7 @@ pub mod method {
 
     pub fn delete(path: &str) -> std::io::Result<()> {
         match fs::remove_file(path) {
-            Ok(_) => Ok(()),                         // Target was a file
+            Ok(_) => Ok(()),                    // Target was a file
             Err(_) => fs::remove_dir_all(path), // Target was a directory
         }
     }
@@ -166,6 +167,8 @@ pub mod headers {
 }
 
 pub mod utils {
+    use crate::type_aliases::Bytes;
+
     /// `get_split_index` gets the `&str` at `index` after performing `split_whitespace`
     pub fn get_split_index(s: &str, index: usize) -> &str {
         let lines = s.split_whitespace().collect::<Vec<&str>>();
@@ -185,5 +188,9 @@ pub mod utils {
         } else {
             lines[index] // Index in bounds
         }
+    }
+
+    pub fn to_bytes(str: &str) -> Bytes {
+        str.as_bytes().to_vec()
     }
 }
