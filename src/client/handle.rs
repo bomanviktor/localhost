@@ -1,20 +1,20 @@
-use crate::client::errors::client_errors::{
-    bad_request, length_required, method_not_allowed, not_found, payload_too_large,
-};
-use crate::client::headers::{get_content_length, get_content_type};
-use crate::client::method::{handle_method, method, method_is_allowed};
-use crate::client::path::{path, path_exists};
-use crate::client::redirections::temporary_redirect;
-use crate::client::utils::to_bytes;
+use crate::client::body::get_body;
+use crate::client::errors::client_error;
+use crate::client::headers::{format_header, get_content_length, get_content_type, get_headers};
+use crate::client::method::{get_method, handle_method, method_is_allowed};
+use crate::client::path::{get_path, path_exists};
+use crate::client::redirections::{is_redirect, redirect};
+use crate::client::version::get_version;
 use crate::client::{content_type, format};
 use crate::server_config::ServerConfig;
 use http::header::{CONTENT_LENGTH, CONTENT_TYPE, HOST};
-use http::{Method, Response, StatusCode, Version};
+use http::{Method, Request, Response, StatusCode};
 use std::fmt::Display;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
-const STATE_CHANGING_METHODS: [Method; 3] = [Method::PUT, Method::POST, Method::PATCH];
+const STATE_CHANGING_METHODS: [Method; 4] =
+    [Method::PUT, Method::POST, Method::PATCH, Method::DELETE];
 
 pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
     let mut buffer = [0; 1024];
@@ -35,31 +35,54 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
     };
 
     let version = get_version(&request_str);
-    let path = path(&request_str);
-    let method = match method(&request_str) {
+    let path = get_path(&request_str);
+    let method = match get_method(&request_str) {
         Ok(method) => method,
         Err(_) => {
-            serve_response(stream, method_not_allowed(config, version));
+            serve_response(
+                stream,
+                client_error(StatusCode::METHOD_NOT_ALLOWED, config, version),
+            );
             return;
         }
     };
 
+    let mut request = Request::builder()
+        .method(&method)
+        .uri(path)
+        .version(version);
+
+    for header in get_headers(&request_str) {
+        if let Some((key, value)) = format_header(header) {
+            request = request.header(key, value);
+        }
+    }
+
+    let body = get_body(&request_str, config.body_size_limit).unwrap_or("");
+    let request = request.body(body).unwrap();
+
     #[allow(unused_assignments)]
     let mut route = &config.routes[0];
+    // Get the route assigned to the path
     if let Some((i, sanitized_path)) = path_exists(path, &config.routes) {
         route = &config.routes[i]; // Set the route index to pass on the correct information.
-        if sanitized_path != path {
-            // TODO: Implementation for route.default_redirect_method
-            serve_response(stream, temporary_redirect(config.host, path, version));
+        if is_redirect(path, sanitized_path) {
+            serve_response(
+                stream,
+                redirect(route.redirect_status_code, config, version, path),
+            );
             return;
         }
     } else {
-        serve_response(stream, not_found(config, version));
+        serve_response(stream, client_error(StatusCode::NOT_FOUND, config, version));
         return;
     }
 
     if !method_is_allowed(&method, route) {
-        serve_response(stream, method_not_allowed(config, version));
+        serve_response(
+            stream,
+            client_error(StatusCode::METHOD_NOT_ALLOWED, config, version),
+        );
         return;
     }
 
@@ -73,7 +96,10 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
         if let Some(content_type) = get_content_type(&request_str) {
             resp = resp.header(CONTENT_TYPE, content_type);
         } else {
-            serve_response(stream, bad_request(config, version)); // Respond with bad request if state changing method but no content type
+            serve_response(
+                stream,
+                client_error(StatusCode::BAD_REQUEST, config, version),
+            ); // Respond with bad request if state changing method but no content type
             return;
         }
 
@@ -85,60 +111,33 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
 
         // Requires a length, has no length, and is a
         if route.length_required && !content_length {
-            serve_response(stream, length_required(config, version));
+            serve_response(
+                stream,
+                client_error(StatusCode::LENGTH_REQUIRED, config, version),
+            );
             return;
         }
 
-        if let Some(resp_body) = get_body(&request_str, config.body_size_limit) {
-            handle_method(path, method, Some(to_bytes(resp_body))); // do stuff to server
-            let resp = resp.body(resp_body).unwrap();
-            serve_response(stream, resp);
+        // Get the body of the response
+        if request.body().len() > config.body_size_limit {
+            serve_response(
+                stream,
+                client_error(StatusCode::PAYLOAD_TOO_LARGE, config, version),
+            );
         } else {
-            serve_response(stream, payload_too_large(config, version));
+            let resp = resp.body(*request.body()).unwrap();
+            serve_response(stream, resp);
         }
         return;
     }
 
     let body = handle_method(path, method, None);
     let resp = resp
-        .version(version)
         .header(CONTENT_TYPE, content_type(&request_str))
-        .status(StatusCode::OK)
         .body(String::from_utf8(body.unwrap_or_default()).unwrap())
         .unwrap();
 
     serve_response(stream, resp)
-}
-
-fn get_version(req: &str) -> Version {
-    let version_str = req
-        .split_whitespace()
-        .find(|s| s.contains("HTTP/"))
-        .unwrap_or("HTTP/1.1");
-
-    match version_str {
-        "HTTP/0.9" => Version::HTTP_09,
-        "HTTP/1.0" => Version::HTTP_10,
-        "HTTP/1.1" => Version::HTTP_11,
-        "HTTP/2.0" => Version::HTTP_2,
-        "HTTP/3.0" => Version::HTTP_3,
-        _ => Version::HTTP_11,
-    }
-}
-
-fn get_body(req: &str, limit: usize) -> Option<&str> {
-    let binding = req
-        .trim_end_matches('\0')
-        .split("\n\n")
-        .collect::<Vec<&str>>();
-
-    let body = *binding.last().unwrap_or(&"");
-
-    if body.len() <= limit {
-        Some(body)
-    } else {
-        None
-    }
 }
 
 fn serve_response<T: Display>(mut stream: TcpStream, response: Response<T>) {
