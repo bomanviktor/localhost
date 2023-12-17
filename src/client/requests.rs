@@ -5,11 +5,11 @@ use std::str::FromStr;
 
 pub mod method {
     use super::{get_line, get_split_index, FromStr, Method, Route};
-    use crate::type_aliases::Bytes;
+    use crate::type_aliases::{Bytes, Path};
     use http::method::InvalidMethod;
     use std::fs;
 
-    pub fn method(req: &str) -> Result<Method, InvalidMethod> {
+    pub fn get_method(req: &str) -> Result<Method, InvalidMethod> {
         let line = get_line(req, 0);
         let method = get_split_index(line, 0);
         // "GET /path2 HTTP/1.1" -> "GET"
@@ -20,7 +20,14 @@ pub mod method {
         route.accepted_http_methods.contains(method)
     }
 
-    pub fn handle_method(path: &str, method: Method, body: Option<Bytes>) -> Option<Bytes> {
+    pub fn handle_method(
+        route: &Route,
+        path: Path,
+        method: Method,
+        body: Option<Bytes>,
+    ) -> Option<Bytes> {
+        let path = &route.format_path(path);
+
         match method {
             Method::GET => Some(get(path).unwrap_or_default()),
             Method::HEAD => None,
@@ -92,7 +99,7 @@ pub mod method {
 pub mod path {
     use super::*;
     /// `path` gets the path from the `request`
-    pub fn path(req: &str) -> &str {
+    pub fn get_path(req: &str) -> &str {
         let line = get_line(req, 0);
         get_split_index(line, 1)
     }
@@ -118,8 +125,56 @@ pub mod path {
     }
 }
 
+pub mod version {
+    use http::Version;
+
+    pub fn get_version(req: &str) -> Version {
+        let version_str = req
+            .split_whitespace()
+            .find(|s| s.contains("HTTP/"))
+            .unwrap_or("HTTP/1.1");
+
+        match version_str {
+            "HTTP/0.9" => Version::HTTP_09,
+            "HTTP/1.0" => Version::HTTP_10,
+            "HTTP/1.1" => Version::HTTP_11,
+            "HTTP/2.0" => Version::HTTP_2,
+            "HTTP/3.0" => Version::HTTP_3,
+            _ => Version::HTTP_11,
+        }
+    }
+}
+
 pub mod headers {
     use super::get_split_index;
+
+    pub fn get_headers(req: &str) -> Vec<&str> {
+        // Remove the body from the request
+        let head = req
+            .trim_end_matches('\n')
+            .trim_end()
+            .split("\r\n\r\n")
+            .collect::<Vec<&str>>()[0];
+
+        head.trim_end()
+            .split("\r\n")
+            .filter(|line| !line.contains("HTTP/"))
+            .collect::<Vec<&str>>()
+    }
+
+    pub fn format_header(header: &str) -> Option<(&str, &str)> {
+        let key_value = header
+            .trim_end_matches('\0')
+            .trim_end()
+            .split(": ")
+            .collect::<Vec<&str>>();
+
+        if key_value.len() == 2 {
+            Some((key_value[0], key_value[1]))
+        } else {
+            None
+        }
+    }
 
     /// `set_cookies` takes care of the `Set-Cookie` header
     pub fn set_cookies(req: &str) -> Option<Vec<&str>> {
@@ -160,6 +215,23 @@ pub mod headers {
             let content_type = get_split_index(line, 1);
             // "Content-Type: text/html" -> "text/html"
             Some(content_type)
+        } else {
+            None
+        }
+    }
+}
+
+pub mod body {
+    pub fn get_body(req: &str, limit: usize) -> Option<&str> {
+        let binding = req
+            .trim_end_matches('\0')
+            .split("\n\n")
+            .collect::<Vec<&str>>();
+
+        let body = *binding.last().unwrap_or(&"");
+
+        if body.len() <= limit {
+            Some(body)
         } else {
             None
         }
