@@ -30,49 +30,46 @@ pub fn format<T: Display>(response: Response<T>) -> Bytes {
 pub fn content_type(path: &str) -> String {
     let file_extension = path.split('.').rev().collect::<Vec<&str>>()[0];
     // "/test.html" -> "html"
-
-    format!(
-        "Content-Type: {}",
-        match file_extension {
-            // Text
-            "html" => "text/html",
-            "css" => "text/css",
-            "js" => "text/javascript",
-            "txt" => "text/plain",
-            "xml" => "text/xml",
-            // Message
-            "http" => "message/http",
-            // Image
-            "jpeg" | "jpg" => "image/jpeg",
-            "png" => "image/png",
-            "gif" => "image/gif",
-            "bmp" => "image/bmp",
-            "svg" => "image/svg+xml",
-            // Audio
-            "aac" => "audio/aac",
-            "eac3" => "audio/eac3",
-            "mp3" => "audio/mpeg",
-            "ogg" => "audio/ogg",
-            // Video
-            "mp4" => "video/mp4",
-            "webm" => "video/webm",
-            "ogv" => "video/ogg",
-            // Application
-            "json" => "application/json",
-            "pdf" => "application/pdf",
-            "zip" => "application/zip",
-            "tar" => "application/x-tar",
-            "gz" => "application/gzip",
-            "exe" => "application/octet-stream",
-            "msi" => "application/octet-stream",
-            "woff" => "application/font-woff",
-            "woff2" => "application/font-woff2",
-            "ttf" => "application/font-sfnt",
-            "otf" => "application/font-sfnt",
-            // Default to HTML for unknown types
-            _ => "text/html",
-        }
-    )
+    match file_extension {
+        // Text
+        "html" => "text/html",
+        "css" => "text/css",
+        "js" => "text/javascript",
+        "txt" => "text/plain",
+        "xml" => "text/xml",
+        // Message
+        "http" => "message/http",
+        // Image
+        "jpeg" | "jpg" => "image/jpeg",
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "bmp" => "image/bmp",
+        "svg" => "image/svg+xml",
+        // Audio
+        "aac" => "audio/aac",
+        "eac3" => "audio/eac3",
+        "mp3" => "audio/mpeg",
+        "ogg" => "audio/ogg",
+        // Video
+        "mp4" => "video/mp4",
+        "webm" => "video/webm",
+        "ogv" => "video/ogg",
+        // Application
+        "json" => "application/json",
+        "pdf" => "application/pdf",
+        "zip" => "application/zip",
+        "tar" => "application/x-tar",
+        "gz" => "application/gzip",
+        "exe" => "application/octet-stream",
+        "msi" => "application/octet-stream",
+        "woff" => "application/font-woff",
+        "woff2" => "application/font-woff2",
+        "ttf" => "application/font-sfnt",
+        "otf" => "application/font-sfnt",
+        // Default to HTML for unknown types
+        _ => "text/html",
+    }
+    .to_string()
 }
 
 pub mod informational {

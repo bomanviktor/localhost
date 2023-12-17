@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 pub mod method {
     use super::{get_line, get_split_index, FromStr, Method, Route};
-    use crate::type_aliases::Bytes;
+    use crate::type_aliases::{Bytes, Path};
     use http::method::InvalidMethod;
     use std::fs;
 
@@ -20,7 +20,14 @@ pub mod method {
         route.accepted_http_methods.contains(method)
     }
 
-    pub fn handle_method(path: &str, method: Method, body: Option<Bytes>) -> Option<Bytes> {
+    pub fn handle_method(
+        route: &Route,
+        path: Path,
+        method: Method,
+        body: Option<Bytes>,
+    ) -> Option<Bytes> {
+        let path = &route.format_path(path);
+
         match method {
             Method::GET => Some(get(path).unwrap_or_default()),
             Method::HEAD => None,

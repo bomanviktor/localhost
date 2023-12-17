@@ -4,6 +4,7 @@ use crate::client::headers::{format_header, get_content_length, get_content_type
 use crate::client::method::{get_method, handle_method, method_is_allowed};
 use crate::client::path::{get_path, path_exists};
 use crate::client::redirections::{is_redirect, redirect};
+use crate::client::utils::to_bytes;
 use crate::client::version::get_version;
 use crate::client::{content_type, format};
 use crate::server_config::ServerConfig;
@@ -61,15 +62,14 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
     let body = get_body(&request_str, config.body_size_limit).unwrap_or("");
     let request = request.body(body).unwrap();
 
-    #[allow(unused_assignments)]
-    let mut route = &config.routes[0];
     // Get the route assigned to the path
+    let route;
     if let Some((i, sanitized_path)) = path_exists(path, &config.routes) {
         route = &config.routes[i]; // Set the route index to pass on the correct information.
         if is_redirect(path, sanitized_path) {
             serve_response(
                 stream,
-                redirect(route.redirect_status_code, config, version, path),
+                redirect(route.redirect_status_code, config, version, sanitized_path),
             );
             return;
         }
@@ -125,13 +125,14 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
                 client_error(StatusCode::PAYLOAD_TOO_LARGE, config, version),
             );
         } else {
+            handle_method(route, path, method, Some(to_bytes(request.body())));
             let resp = resp.body(*request.body()).unwrap();
             serve_response(stream, resp);
         }
         return;
     }
 
-    let body = handle_method(path, method, None);
+    let body = handle_method(route, path, method, None);
     let resp = resp
         .header(CONTENT_TYPE, content_type(&request_str))
         .body(String::from_utf8(body.unwrap_or_default()).unwrap())
