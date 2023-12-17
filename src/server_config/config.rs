@@ -22,6 +22,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
             accepted_http_methods: vec![http::Method::GET],
             http_redirections: HashMap::from([("/test1", "/path1"), ("/test2", "/path2")]),
             redirect_status_code: StatusCode::PERMANENT_REDIRECT,
+            root_path: Some("src"),
             default_if_url_is_dir: "some default",
             default_if_request_is_dir: "some other default",
             cgi_def: HashMap::from([
