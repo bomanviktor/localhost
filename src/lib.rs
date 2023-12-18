@@ -1,15 +1,10 @@
-pub mod type_aliases {
-    pub type Port = u16;
-    pub type Bytes = Vec<u8>;
-    pub type Path<'a> = &'a str;
-    pub type FileExtension<'a> = &'a str;
-}
 pub mod server_config {
     pub mod config;
+    pub use config::*;
+
     use crate::server::Port;
     use crate::server_config::route::Route;
     use crate::type_aliases::Path;
-    pub use config::*;
     use std::collections::HashMap;
 
     #[derive(Clone, Debug)]
@@ -21,8 +16,75 @@ pub mod server_config {
         pub routes: Vec<Route<'a>>,
     }
 
+    pub mod builder {
+        use super::*;
+        #[derive(Debug)]
+        pub struct ConfigBuilder<'a> {
+            pub host: Option<&'a str>,
+            pub ports: Option<Vec<Port>>,
+            pub default_error_paths: Option<HashMap<http::StatusCode, Path<'a>>>,
+            pub body_size_limit: Option<usize>,
+            pub routes: Option<Vec<Route<'a>>>,
+        }
+
+        impl Default for ConfigBuilder<'_> {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+        impl<'a> ConfigBuilder<'a> {
+            pub fn new() -> ConfigBuilder<'a> {
+                Self {
+                    host: None,
+                    ports: None,
+                    default_error_paths: None,
+                    body_size_limit: None,
+                    routes: None,
+                }
+            }
+
+            pub fn host(&mut self, host_addr: &'a str) -> &mut Self {
+                self.host = Some(host_addr);
+                self
+            }
+
+            pub fn ports(&mut self, ports: Vec<Port>) -> &mut Self {
+                self.ports = Some(ports);
+                self
+            }
+
+            pub fn default_error_paths(
+                &mut self,
+                paths: HashMap<http::StatusCode, &'a str>,
+            ) -> &mut Self {
+                self.default_error_paths = Some(paths);
+                self
+            }
+
+            pub fn body_size_limit(&mut self, limit: usize) -> &mut Self {
+                self.body_size_limit = Some(limit);
+                self
+            }
+
+            pub fn routes(&mut self, routes: Vec<Route<'a>>) -> &mut Self {
+                self.routes = Some(routes);
+                self
+            }
+
+            pub fn build(&self) -> ServerConfig<'a> {
+                ServerConfig {
+                    host: self.host.expect("Invalid host"),
+                    ports: self.ports.clone().expect("Invalid ports"),
+                    default_error_paths: self.default_error_paths.clone().expect("Invalid paths"),
+                    body_size_limit: self.body_size_limit.expect("Invalid size limit"),
+                    routes: self.routes.clone().expect("Invalid routes"),
+                }
+            }
+        }
+    }
+
     pub mod route {
-        use crate::server::Cgi;
+        use crate::server_config::route::cgi::Cgi;
         use crate::type_aliases::{FileExtension, Path};
         use std::collections::HashMap;
 
@@ -49,29 +111,48 @@ pub mod server_config {
                 }
             }
         }
+
+        pub mod cgi {
+            #[derive(Clone, Debug)]
+            pub enum Cgi {
+                Python,
+                PHP,
+                JavaScript,
+                Cpp,
+            }
+        }
     }
 }
+pub mod type_aliases {
+    pub type Port = u16;
+    pub type Bytes = Vec<u8>;
+    pub type Path<'a> = &'a str;
+    pub type FileExtension<'a> = &'a str;
+}
 
-pub mod server {
-    pub mod cgi;
-    pub use cgi::*;
+pub mod client {
     pub mod handle;
     pub use handle::*;
 
     pub mod requests;
     pub use requests::*;
 
-    pub mod routes;
-    pub use routes::*;
-
-    pub mod start;
-    pub use start::*;
-
     pub mod responses;
+    pub use responses::*;
+}
+pub mod server {
+    use crate::client::handle_client;
+    use crate::server_config::config::server_config;
     use crate::server_config::ServerConfig;
     pub use crate::type_aliases::Port;
-    pub use responses::*;
-    use std::net::TcpListener;
+
+    use mio::net::TcpListener;
+    use mio::{Events, Interest, Poll, Token};
+    use std::collections::HashMap;
+    use std::io::ErrorKind;
+
+    use std::net::SocketAddr;
+    use std::sync::Arc;
 
     #[derive(Debug)]
     pub struct Server<'a> {
@@ -82,6 +163,94 @@ pub mod server {
     impl<'a> Server<'a> {
         pub fn new(listeners: Vec<TcpListener>, config: ServerConfig<'a>) -> Self {
             Self { listeners, config }
+        }
+    }
+
+    pub fn servers() -> Vec<Server<'static>> {
+        let mut servers = Vec::new();
+
+        for config in server_config() {
+            let mut listeners = Vec::new();
+            for port in &config.ports {
+                // Create a listener for each port
+                let address = format!("{}:{}", config.host, port);
+                match TcpListener::bind(address.parse::<SocketAddr>().unwrap()) {
+                    Ok(listener) => {
+                        listeners.push(listener);
+                        println!("Server listening on {}", address);
+                    }
+                    Err(e) => eprintln!("Error: {}. Unable to listen to: {}", e, address),
+                }
+            }
+            // Make a server and push it to the servers vector
+            servers.push(Server::new(listeners, config))
+        }
+        servers
+    }
+
+    pub fn start(mut servers: Vec<Server>) {
+        let mut poll = match Poll::new() {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("Failed to create Poll instance: {}", e);
+                return;
+            }
+        };
+        let mut events = Events::with_capacity(128);
+        let mut server_tokens = HashMap::new();
+        let listeners = Vec::new();
+
+        let mut token_id = 0; // Initialize a token counter
+
+        let mut listener_tokens = HashMap::new();
+        for server in servers.iter_mut() {
+            let config = Arc::new(server.config.clone()); // Clone the config for shared ownership
+            for listener in &mut server.listeners {
+                let token = Token(token_id);
+                token_id += 1; // Increment the token counter for the next listener
+
+                // Register the listener to the poll instance
+                match poll
+                    .registry()
+                    .register(listener, token, Interest::READABLE)
+                {
+                    Ok(_) => {
+                        server_tokens.insert(token, Arc::clone(&config));
+                        listener_tokens.insert(token, listener);
+                    }
+                    Err(e) => {
+                        eprintln!("Error registering listener: {}", e);
+                        continue;
+                    }
+                };
+            }
+        }
+
+        let mut listener_indices = HashMap::new();
+        for (index, listener) in listeners.iter().enumerate() {
+            let token = listener_tokens
+                .keys()
+                .find(|&token| std::ptr::eq(listener_tokens[token], listener))
+                .unwrap();
+            listener_indices.insert(token, index);
+        }
+
+        loop {
+            poll.poll(&mut events, None).unwrap();
+
+            for event in events.iter() {
+                println!("Event: {:?}", event);
+                if let Some(config) = server_tokens.get(&event.token()) {
+                    // Access the listener directly from listener_tokens map
+                    if let Some(listener) = listener_tokens.get_mut(&event.token()) {
+                        match listener.accept() {
+                            Ok((stream, _)) => handle_client(stream, config),
+                            Err(ref e) if e.kind() == ErrorKind::WouldBlock => (),
+                            Err(e) => eprintln!("Error: {}", e),
+                        }
+                    }
+                }
+            }
         }
     }
 }

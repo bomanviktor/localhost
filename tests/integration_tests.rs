@@ -32,7 +32,7 @@ mod test_requests {
         use super::*;
         #[test]
         fn test_get() {
-            thread::spawn(|| setup());
+            thread::spawn(setup);
             // Request 1
             let mut easy = Easy::new();
             easy.url("localhost:8080/path1").unwrap();
