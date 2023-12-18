@@ -222,13 +222,13 @@ pub mod headers {
 }
 
 pub mod body {
-    pub fn get_body(req: &str, limit: usize) -> Option<&str> {
-        let binding = req
+    pub fn get_body(req: &str, limit: usize) -> Option<String> {
+        let body = req
             .trim_end_matches('\0')
-            .split("\n\n")
-            .collect::<Vec<&str>>();
-
-        let body = *binding.last().unwrap_or(&"");
+            .split("\r\n\r\n")
+            .skip(1)
+            .collect::<Vec<&str>>()
+            .join("\r\n\r\n");
 
         if body.len() <= limit {
             Some(body)
