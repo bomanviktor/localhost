@@ -1,4 +1,4 @@
-use crate::server_config::route::cgi::Cgi;
+use crate::cgi::Cgi;
 pub use crate::server_config::*;
 use http::StatusCode;
 use std::collections::HashMap;
@@ -18,7 +18,14 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
         ]),
         body_size_limit: 1024,
         routes: vec![Route {
-            paths: vec!["/path1", "/path2"],
+            paths: vec![
+                "/path1",
+                "/path2",
+                "/cgi/python.py",
+                "/cgi/php-test.php",
+                "/cgi/javascript.js",
+                "/cgi/ruby.rb",
+            ],
             accepted_http_methods: vec![http::Method::GET],
             http_redirections: HashMap::from([("/test1", "/path1"), ("/test2", "/path2")]),
             redirect_status_code: StatusCode::PERMANENT_REDIRECT,
@@ -26,10 +33,11 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
             default_if_url_is_dir: "some default",
             default_if_request_is_dir: "some other default",
             cgi_def: HashMap::from([
-                (".php", Cgi::PHP),
-                (".py", Cgi::Python),
-                (".js", Cgi::JavaScript),
-                (".cpp", Cgi::Cpp),
+                ("php", Cgi::PHP),
+                ("rb", Cgi::Ruby),
+                ("py", Cgi::Python),
+                ("js", Cgi::JavaScript),
+                ("cpp", Cgi::Cpp),
             ]),
             list_directory: true,
             length_required: true,
