@@ -1,10 +1,15 @@
+pub mod type_aliases {
+    pub type Port = u16;
+    pub type Bytes = Vec<u8>;
+    pub type Path<'a> = &'a str;
+    pub type FileExtension<'a> = &'a str;
+}
 pub mod server_config {
     pub mod config;
-    pub use config::*;
-
     use crate::server::Port;
     use crate::server_config::route::Route;
     use crate::type_aliases::Path;
+    pub use config::*;
     use std::collections::HashMap;
 
     #[derive(Clone, Debug)]
@@ -17,7 +22,7 @@ pub mod server_config {
     }
 
     pub mod route {
-        use crate::cgi::Cgi;
+        use crate::server::Cgi;
         use crate::type_aliases::{FileExtension, Path};
         use std::collections::HashMap;
 
@@ -47,64 +52,25 @@ pub mod server_config {
     }
 }
 
-pub mod cgi {
-    #[derive(Clone, Debug)]
-    pub enum Cgi {
-        Ada,
-        C,
-        CSharp,
-        Cpp,
-        D,
-        Erlang,
-        Fortran,
-        Go,
-        Groovy,
-        Haskell,
-        Java,
-        JavaScript,
-        Julia,
-        Kotlin,
-        Lua,
-        Nim,
-        ObjectiveC,
-        OCaml,
-        Pascal,
-        Perl,
-        PHP,
-        Python,
-        R,
-        Ruby,
-        Rust,
-        Scala,
-        Shell,
-        Swift,
-        TypeScript,
-        Zig,
-    }
-}
-pub mod type_aliases {
-    pub type Port = u16;
-    pub type Bytes = Vec<u8>;
-    pub type Path<'a> = &'a str;
-    pub type FileExtension<'a> = &'a str;
-}
-
-pub mod client {
+pub mod server {
+    pub mod cgi;
+    pub use cgi::*;
     pub mod handle;
     pub use handle::*;
 
     pub mod requests;
     pub use requests::*;
 
+    pub mod routes;
+    pub use routes::*;
+
+    pub mod start;
+    pub use start::*;
+
     pub mod responses;
-    pub use responses::*;
-}
-pub mod server {
-    use crate::client::handle_client;
-    use crate::server_config::config::server_config;
     use crate::server_config::ServerConfig;
     pub use crate::type_aliases::Port;
-    use std::io::ErrorKind;
+    pub use responses::*;
     use std::net::TcpListener;
 
     #[derive(Debug)]
@@ -116,48 +82,6 @@ pub mod server {
     impl<'a> Server<'a> {
         pub fn new(listeners: Vec<TcpListener>, config: ServerConfig<'a>) -> Self {
             Self { listeners, config }
-        }
-    }
-
-    pub fn servers() -> Vec<Server<'static>> {
-        let mut servers = Vec::new();
-
-        for config in server_config() {
-            let mut listeners = Vec::new();
-            for port in &config.ports {
-                // Create a listener for each port
-                let address = format!("{}:{}", config.host, port);
-                match TcpListener::bind(&address) {
-                    Ok(listener) => {
-                        listener.set_nonblocking(true).unwrap();
-                        listeners.push(listener);
-                        println!("Server listening on {}", address);
-                    }
-                    Err(e) => eprintln!("Error: {}. Unable to listen to: {}", e, address),
-                }
-            }
-            // Make a server and push it to the servers vector
-            servers.push(Server::new(listeners, config))
-        }
-        servers
-    }
-
-    pub fn start(mut servers: Vec<Server>) {
-        loop {
-            for server in &mut servers {
-                for listener in &mut server.listeners {
-                    match listener.accept() {
-                        Ok((mut stream, _addr)) => handle_client(&mut stream, &server.config),
-                        Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                            // No incoming connections, continue to the next listener
-                            continue;
-                        }
-                        Err(e) => eprintln!("Error accepting connection: {}", e),
-                    }
-                }
-            }
-            // Sleep for a short duration to avoid busy waiting
-            std::thread::sleep(std::time::Duration::from_millis(1));
         }
     }
 }

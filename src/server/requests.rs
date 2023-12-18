@@ -1,10 +1,39 @@
-use crate::client::utils::{get_line, get_split_index};
+use crate::server::body::get_body;
+use crate::server::headers::{format_header, get_headers};
+use crate::server::method::get_method;
+use crate::server::path::get_path;
+use crate::server::version::get_version;
 use crate::server_config::route::Route;
-use http::Method;
+use crate::server_config::ServerConfig;
+use http::{Method, Request, StatusCode};
 use std::str::FromStr;
 
+pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>, StatusCode> {
+    let version = match get_version(req_str) {
+        Ok(v) => v,
+        Err(_) => return Err(StatusCode::HTTP_VERSION_NOT_SUPPORTED),
+    };
+
+    let path = get_path(req_str);
+    let method = match get_method(req_str) {
+        Ok(method) => method,
+        Err(_) => return Err(StatusCode::METHOD_NOT_ALLOWED),
+    };
+    let mut request = Request::builder().method(method).uri(path).version(version);
+
+    for header in get_headers(req_str) {
+        if let Some((key, value)) = format_header(header) {
+            request = request.header(key, value);
+        }
+    }
+
+    let body = get_body(req_str, conf.body_size_limit).unwrap_or("".to_string());
+    Ok(request.body(body).unwrap())
+}
+
 pub mod method {
-    use super::{get_line, get_split_index, FromStr, Method, Route};
+    use super::{FromStr, Method, Route};
+    use crate::server::utils::{get_line, get_split_index};
     use crate::type_aliases::{Bytes, Path};
     use http::method::InvalidMethod;
     use std::fs;
@@ -23,12 +52,12 @@ pub mod method {
     pub fn handle_method(
         route: &Route,
         path: Path,
-        method: Method,
+        method: &Method,
         body: Option<Bytes>,
     ) -> Option<Bytes> {
         let path = &route.format_path(path);
 
-        match method {
+        match *method {
             Method::GET => Some(get(path).unwrap_or_default()),
             Method::HEAD => None,
             Method::POST => {
@@ -98,6 +127,7 @@ pub mod method {
 
 pub mod path {
     use super::*;
+    use crate::server::utils::{get_line, get_split_index};
     /// `path` gets the path from the `request`
     pub fn get_path(req: &str) -> &str {
         let line = get_line(req, 0);
@@ -146,7 +176,7 @@ pub mod version {
 }
 
 pub mod headers {
-    use super::get_split_index;
+    use crate::server::utils::get_split_index;
 
     pub fn get_headers(req: &str) -> Vec<&str> {
         // Remove the body from the request
@@ -229,14 +259,6 @@ pub mod body {
             .skip(1)
             .collect::<Vec<&str>>()
             .join("\r\n\r\n");
-
-        /* STATUS LINE
-         * HEADERS
-         *
-         * BODY
-         *
-         * -> BODY
-         */
 
         if body.len() <= limit {
             Some(body)

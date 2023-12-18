@@ -1,0 +1,135 @@
+use crate::server::errors::error;
+use crate::server::method::handle_method;
+use crate::server::redirections::redirect;
+use crate::server::utils::to_bytes;
+use crate::server::{
+    content_type, execute_cgi_script, format, get_request, get_route, is_cgi_request,
+};
+use crate::server_config::route::Route;
+use crate::server_config::ServerConfig;
+use http::header::{CONTENT_LENGTH, CONTENT_TYPE, HOST};
+use http::{Method, Request, Response, StatusCode};
+use std::fmt::Display;
+use std::io;
+use std::io::{Read, Write};
+use std::net::TcpStream;
+
+pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Result<()> {
+    let mut buffer = [0; 1024];
+
+    let bytes_read = stream.read(&mut buffer)?;
+
+    let request_string = match String::from_utf8(buffer[..bytes_read].to_vec()) {
+        Ok(request_str) => request_str,
+        Err(e) => {
+            eprintln!("Error reading from buffer to string: {e}");
+            return Ok(());
+        }
+    };
+
+    let request = match get_request(config, &request_string) {
+        Ok(req) => req,
+        Err(e) => return serve_response(stream, error(e, config)),
+    };
+
+    let route = match get_route(&request, config) {
+        Ok(route) => route,
+        Err((code, path)) if code.is_redirection() => {
+            return serve_response(stream, redirect(code, config, request.version(), path));
+        }
+        Err((code, _)) => return serve_response(stream, error(code, config)),
+    };
+
+    if is_cgi_request(&request.uri().to_string()) {
+        match execute_cgi_script(&request_string, config, &route) {
+            Ok(resp) => {
+                stream.write_all(&resp).unwrap();
+                stream.flush().expect("could not flush");
+            }
+            Err(code) => return serve_response(stream, error(code, config)),
+        }
+        return Ok(());
+    }
+
+    if request.method().is_safe() {
+        match handle_safe_request(&request, config, &route) {
+            Ok(response) => serve_response(stream, response)?,
+            Err(code) => serve_response(stream, error(code, config))?,
+        }
+    } else {
+        match handle_unsafe_request(&request, config, &route) {
+            Ok(response) => serve_response(stream, response)?,
+            Err(code) => serve_response(stream, error(code, config))?,
+        };
+    }
+    Ok(())
+}
+
+pub fn serve_response<T: Display>(stream: &mut TcpStream, response: Response<T>) -> io::Result<()> {
+    stream.write_all(&format(response))?;
+    match stream.flush() {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+fn handle_safe_request(
+    req: &Request<String>,
+    config: &ServerConfig,
+    route: &Route,
+) -> Result<Response<String>, StatusCode> {
+    let path = &req.uri().to_string();
+    let body = handle_method(route, path, req.method(), None).unwrap_or_default();
+    if body.is_empty() && !route.accepted_http_methods.contains(&Method::HEAD) {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let resp = Response::builder()
+        .status(StatusCode::OK)
+        .version(req.version())
+        .header(HOST, config.host)
+        .header(CONTENT_TYPE, content_type(path))
+        .body(String::from_utf8(body).unwrap())
+        .unwrap();
+    Ok(resp)
+}
+
+fn handle_unsafe_request(
+    req: &Request<String>,
+    config: &ServerConfig,
+    route: &Route,
+) -> Result<Response<String>, StatusCode> {
+    let mut resp = Response::builder()
+        .status(StatusCode::OK)
+        .version(req.version())
+        .header(HOST, config.host);
+
+    // Set the Content-Type header or respond with 400 - Bad Request
+    if let Some(content_type) = req.headers().get(CONTENT_TYPE) {
+        resp = resp.header(CONTENT_TYPE, content_type);
+    } else {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Set the Content-Length header or respond with 411 - Length Required
+    let mut content_length = false;
+    if let Some(length) = req.headers().get(CONTENT_LENGTH) {
+        resp = resp.header(CONTENT_LENGTH, length);
+        content_length = true;
+    }
+
+    // Requires a length, has no length, and is a
+    if route.length_required && !content_length {
+        return Err(StatusCode::LENGTH_REQUIRED);
+    }
+
+    // Get the body of the response
+    if req.body().len() > config.body_size_limit {
+        return Err(StatusCode::PAYLOAD_TOO_LARGE);
+    }
+
+    let path = &req.uri().to_string();
+    let body = req.body().clone();
+    handle_method(route, path, req.method(), Some(to_bytes(&body)));
+    Ok(resp.body(body).unwrap())
+}

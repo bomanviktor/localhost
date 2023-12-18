@@ -1,4 +1,4 @@
-use crate::cgi::Cgi;
+use crate::server::Cgi;
 pub use crate::server_config::*;
 use http::StatusCode;
 use std::collections::HashMap;

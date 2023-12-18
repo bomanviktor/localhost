@@ -1,4 +1,4 @@
-use crate::client::utils::to_bytes;
+use crate::server::utils::to_bytes;
 use crate::server_config::ServerConfig;
 use crate::type_aliases::Bytes;
 use http::{Response, StatusCode, Version};
@@ -100,7 +100,7 @@ pub mod redirections {
         status: StatusCode,
         config: &ServerConfig,
         version: Version,
-        path: &str,
+        path: String,
     ) -> Response<String> {
         http::Response::builder()
             .version(version)
@@ -119,19 +119,12 @@ pub mod redirections {
 
 pub mod errors {
     use super::*;
-    use crate::client::utils::to_bytes;
-    use crate::server_config::ServerConfig;
     use http::header::{HOST, SERVER};
 
-    fn base_response(
-        code: StatusCode,
-        config: &ServerConfig,
-        version: Version,
-    ) -> Response<String> {
+    pub fn error(code: StatusCode, config: &ServerConfig) -> Response<String> {
         let error_body = check_errors(code, config).unwrap_or(to_bytes("400"));
 
         Response::builder()
-            .version(version)
             .header(HOST, config.host)
             .header(SERVER, "grit:lab-localhost/1.0")
             .status(code)
@@ -145,23 +138,5 @@ pub mod errors {
             .get(&code)
             .unwrap_or(&"/400.html");
         fs::read(format!("src/default_errors{error_path}"))
-    }
-
-    /// Create a response for all 4xx errors
-    pub fn client_error(
-        code: StatusCode,
-        config: &ServerConfig,
-        version: Version,
-    ) -> Response<String> {
-        base_response(code, config, version)
-    }
-
-    /// Create a response for all 5xx errors
-    pub fn server_error(
-        code: StatusCode,
-        config: &ServerConfig,
-        version: Version,
-    ) -> Response<String> {
-        base_response(code, config, version)
     }
 }
