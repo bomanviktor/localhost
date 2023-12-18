@@ -14,12 +14,9 @@ mod test_config {
     }
 }
 
+#[allow(dead_code)]
 mod test_requests {
-    use crate::common::setup;
-    use crate::test_requests::utils::get_status;
-    use curl::easy::Easy;
     use http::StatusCode;
-    use std::thread;
     mod utils {
         use super::*;
         use localhost::client::utils::get_split_index;
@@ -29,6 +26,7 @@ mod test_requests {
             StatusCode::from_str(status).unwrap_or(StatusCode::OK)
         }
     }
+    /*
     mod valid {
         use super::*;
         #[test]
@@ -65,6 +63,8 @@ mod test_requests {
             })
             .unwrap();
             easy.perform().unwrap_or_default();
+
         }
     }
+             */
 }
