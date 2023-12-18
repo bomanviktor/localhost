@@ -126,7 +126,7 @@ pub mod path {
 }
 
 pub mod version {
-    use http::Version;
+    use http::{StatusCode, Version};
 
     pub fn get_version(req: &str) -> Version {
         let version_str = req
@@ -230,6 +230,14 @@ pub mod body {
             .collect::<Vec<&str>>()
             .join("\r\n\r\n");
 
+        /* STATUS LINE
+         * HEADERS
+         *
+         * BODY
+         *
+         * -> BODY
+         */
+
         if body.len() <= limit {
             Some(body)
         } else {
@@ -242,9 +250,11 @@ pub mod utils {
     use crate::type_aliases::Bytes;
 
     /// `get_split_index` gets the `&str` at `index` after performing `split_whitespace`
-    pub fn get_split_index(s: &str, index: usize) -> &str {
-        let lines = s.split_whitespace().collect::<Vec<&str>>();
-        if index > lines.len() {
+    pub fn get_split_index(str: &str, index: usize) -> &str {
+        let lines = str.split_whitespace().collect::<Vec<&str>>();
+        if lines.is_empty() {
+            ""
+        } else if index > lines.len() {
             lines[0]
         } else {
             lines[index]
@@ -252,16 +262,17 @@ pub mod utils {
     }
 
     /// `get_line` gets the `&str` at `index` after performing `split('\n')`
-    pub fn get_line(s: &str, index: usize) -> &str {
-        let lines = s
+    pub fn get_line(str: &str, index: usize) -> &str {
+        let lines = str
             .trim_end_matches('\0')
             .split("\r\n")
             .collect::<Vec<&str>>();
-
-        if index > lines.len() {
-            lines[0] // Index out of bounds
+        if lines.is_empty() {
+            ""
+        } else if index > lines.len() {
+            lines[0]
         } else {
-            lines[index] // Index in bounds
+            lines[index]
         }
     }
 
