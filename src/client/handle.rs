@@ -156,16 +156,18 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
         return;
     }
 
-    let body = handle_method(route, path, method, None);
+    let body = handle_method(route, path, method, None).unwrap_or_default();
+    if body.is_empty() && !route.accepted_http_methods.contains(&Method::HEAD) {
+        serve_response(stream, client_error(StatusCode::NOT_FOUND, config, version));
+        return;
+    }
 
-    let resp = if body.is_some() {
-        resp.header(CONTENT_TYPE, content_type(&request_str))
-            .body(String::from_utf8(body.unwrap_or_default()).unwrap())
-    } else {
-        resp.body("".to_string())
-    };
+    let resp = resp
+        .header(CONTENT_TYPE, content_type(&request_str))
+        .body(String::from_utf8(body).unwrap())
+        .unwrap();
 
-    serve_response(stream, resp.unwrap())
+    serve_response(stream, resp)
 }
 
 fn serve_response<T: Display>(mut stream: TcpStream, response: Response<T>) {
@@ -192,7 +194,6 @@ pub mod cgi {
     }
 
     pub fn is_cgi_request(path: &str) -> bool {
-        println!("is cgi request");
         path.starts_with("/cgi/")
     }
 
