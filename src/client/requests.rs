@@ -179,7 +179,7 @@ pub mod headers {
     /// `set_cookies` takes care of the `Set-Cookie` header
     pub fn set_cookies(req: &str) -> Option<Vec<&str>> {
         let cookies = req
-            .split('\n')
+            .split("\r\n")
             .filter(|l| l.contains("Set-Cookie"))
             .map(|cookie| get_split_index(cookie, 1)) // "Set-Cookie: foo_bar=baz" -> "foo_bar=baz"
             .collect::<Vec<&str>>();
@@ -193,7 +193,7 @@ pub mod headers {
 
     /// `get_cookies` takes care of the `Cookie` header
     pub fn get_cookies(req: &str) -> Option<Vec<&str>> {
-        if let Some(cookies) = req.split('\n').find(|line| line.contains("Cookie")) {
+        if let Some(cookies) = req.split("\r\n").find(|line| line.contains("Cookie")) {
             return Some(cookies.split(';').collect::<Vec<&str>>());
         }
         None
@@ -201,7 +201,7 @@ pub mod headers {
 
     /// `get_content_type` gets the `Content-Length` header for state changing methods
     pub fn get_content_length(req: &str) -> Option<&str> {
-        if let Some(line) = req.split('\n').find(|&l| l.contains("Content-Length")) {
+        if let Some(line) = req.split("\r\n").find(|&l| l.contains("Content-Length")) {
             let content_length = get_split_index(line, 1);
             // "Content-Length: 1337" -> "1337"
             return Some(content_length);
@@ -253,7 +253,10 @@ pub mod utils {
 
     /// `get_line` gets the `&str` at `index` after performing `split('\n')`
     pub fn get_line(s: &str, index: usize) -> &str {
-        let lines = s.trim_end_matches('\0').split('\n').collect::<Vec<&str>>();
+        let lines = s
+            .trim_end_matches('\0')
+            .split("\r\n")
+            .collect::<Vec<&str>>();
 
         if index > lines.len() {
             lines[0] // Index out of bounds
