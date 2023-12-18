@@ -244,7 +244,9 @@ pub mod utils {
     /// `get_split_index` gets the `&str` at `index` after performing `split_whitespace`
     pub fn get_split_index(s: &str, index: usize) -> &str {
         let lines = s.split_whitespace().collect::<Vec<&str>>();
-        if index > lines.len() {
+        if lines.is_empty() {
+            ""
+        } else if index >= lines.len() {
             lines[0]
         } else {
             lines[index]

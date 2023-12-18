@@ -147,67 +147,83 @@ pub mod server {
         servers
     }
 
-    pub fn start(mut servers: Vec<Server>) {
-        let mut poll = match Poll::new() {
-            Ok(p) => p,
-            Err(e) => {
-                eprintln!("Failed to create Poll instance: {}", e);
-                return;
-            }
-        };
+    struct ListenerConfig<'a> {
+        listener_index: usize,
+        config: Arc<ServerConfig<'a>>,
+    }
+
+    pub fn start(servers: Vec<Server<'static>>) {
+        let mut poll = Poll::new().expect("Failed to create Poll instance");
         let mut events = Events::with_capacity(128);
-        let mut server_tokens = HashMap::new();
-        let listeners = Vec::new();
+        let mut connections = HashMap::new();
+        let mut token_id = 2; // Start token counting from 2
+        let mut all_listeners = Vec::new(); // Store all listeners
+        let mut listener_configs = Vec::new(); // Store ListenerConfig instances
 
-        let mut token_id = 0; // Initialize a token counter
+        for server in servers {
+            let config = Arc::new(server.config);
 
-        let mut listener_tokens = HashMap::new();
-        for server in servers.iter_mut() {
-            let config = Arc::new(server.config.clone()); // Clone the config for shared ownership
-            for listener in &mut server.listeners {
+            for listener in server.listeners {
+                let listener_index = all_listeners.len();
+                all_listeners.push(listener);
                 let token = Token(token_id);
-                token_id += 1; // Increment the token counter for the next listener
+                token_id += 1;
 
-                // Register the listener to the poll instance
-                match poll
-                    .registry()
-                    .register(listener, token, Interest::READABLE)
-                {
-                    Ok(_) => {
-                        server_tokens.insert(token, Arc::clone(&config));
-                        listener_tokens.insert(token, listener);
-                    }
-                    Err(e) => {
-                        eprintln!("Error registering listener: {}", e);
-                        continue;
-                    }
-                };
+                poll.registry()
+                    .register(
+                        &mut all_listeners[listener_index],
+                        token,
+                        Interest::READABLE,
+                    )
+                    .expect("Failed to register listener");
+
+                listener_configs.push(ListenerConfig {
+                    listener_index,
+                    config: Arc::clone(&config),
+                });
             }
         }
 
-        let mut listener_indices = HashMap::new();
-        for (index, listener) in listeners.iter().enumerate() {
-            let token = listener_tokens
-                .keys()
-                .find(|&token| std::ptr::eq(listener_tokens[token], listener))
-                .unwrap();
-            listener_indices.insert(token, index);
-        }
-
+        // Event loop
         loop {
-            poll.poll(&mut events, None).unwrap();
+            poll.poll(&mut events, None).expect("Poll failed");
 
             for event in events.iter() {
-                println!("Event: {:?}", event);
-                if let Some(config) = server_tokens.get(&event.token()) {
-                    // Access the listener directly from listener_tokens map
-                    if let Some(listener) = listener_tokens.get_mut(&event.token()) {
+                let token = event.token();
+
+                if let Some(listener_config) = listener_configs
+                    .iter()
+                    .find(|lc| token == Token(lc.listener_index + 2))
+                {
+                    let listener = &mut all_listeners[listener_config.listener_index];
+
+                    // Accept new connections in a loop
+                    loop {
                         match listener.accept() {
-                            Ok((stream, _)) => handle_client(stream, config),
-                            Err(ref e) if e.kind() == ErrorKind::WouldBlock => (),
-                            Err(e) => eprintln!("Error: {}", e),
+                            Ok((mut stream, _)) => {
+                                let connection_token = Token(token_id);
+                                println!("New connection on {}", listener.local_addr().unwrap());
+                                token_id += 1;
+
+                                poll.registry()
+                                    .register(&mut stream, connection_token, Interest::READABLE)
+                                    .expect("Failed to register new connection");
+
+                                connections.insert(
+                                    connection_token,
+                                    (stream, Arc::clone(&listener_config.config)),
+                                );
+                            }
+                            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                                // No more connections to accept
+                                break;
+                            }
+                            Err(e) => eprintln!("Error accepting connection: {}", e),
                         }
                     }
+                } else if let Some((stream, config)) = connections.get_mut(&token) {
+                    // Handle existing connection
+                    handle_client(stream, config);
                 }
             }
         }

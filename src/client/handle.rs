@@ -18,8 +18,7 @@ use std::io::{Read, Write};
 const STATE_CHANGING_METHODS: [Method; 4] =
     [Method::PUT, Method::POST, Method::PATCH, Method::DELETE];
 
-pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
-    println!("hello");
+pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) {
     let mut buffer = [0; 1024];
 
     // Attempt to read the stream into the buffer
@@ -171,8 +170,8 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
     serve_response(stream, resp)
 }
 
-fn serve_response<T: Display>(mut stream: TcpStream, response: Response<T>) {
-    if let Err(error) = stream.write_all(&format(response)) {
+fn serve_response<T: Display + Clone>(stream: &mut TcpStream, response: Response<T>) {
+    if let Err(error) = stream.write_all(&format(response.clone())) {
         eprintln!("Error writing response: {error}");
     }
     stream.flush().expect("could not flush");
@@ -187,6 +186,7 @@ pub mod cgi {
     use crate::server_config::ServerConfig;
     use crate::type_aliases::Bytes;
     use std::process::Command;
+    use crate::server_config::route::cgi::Cgi;
 
     pub enum CgiError {
         NotFound,
