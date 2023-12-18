@@ -16,73 +16,6 @@ pub mod server_config {
         pub routes: Vec<Route<'a>>,
     }
 
-    pub mod builder {
-        use super::*;
-        #[derive(Debug)]
-        pub struct ConfigBuilder<'a> {
-            pub host: Option<&'a str>,
-            pub ports: Option<Vec<Port>>,
-            pub default_error_paths: Option<HashMap<http::StatusCode, Path<'a>>>,
-            pub body_size_limit: Option<usize>,
-            pub routes: Option<Vec<Route<'a>>>,
-        }
-
-        impl Default for ConfigBuilder<'_> {
-            fn default() -> Self {
-                Self::new()
-            }
-        }
-        impl<'a> ConfigBuilder<'a> {
-            pub fn new() -> ConfigBuilder<'a> {
-                Self {
-                    host: None,
-                    ports: None,
-                    default_error_paths: None,
-                    body_size_limit: None,
-                    routes: None,
-                }
-            }
-
-            pub fn host(&mut self, host_addr: &'a str) -> &mut Self {
-                self.host = Some(host_addr);
-                self
-            }
-
-            pub fn ports(&mut self, ports: Vec<Port>) -> &mut Self {
-                self.ports = Some(ports);
-                self
-            }
-
-            pub fn default_error_paths(
-                &mut self,
-                paths: HashMap<http::StatusCode, &'a str>,
-            ) -> &mut Self {
-                self.default_error_paths = Some(paths);
-                self
-            }
-
-            pub fn body_size_limit(&mut self, limit: usize) -> &mut Self {
-                self.body_size_limit = Some(limit);
-                self
-            }
-
-            pub fn routes(&mut self, routes: Vec<Route<'a>>) -> &mut Self {
-                self.routes = Some(routes);
-                self
-            }
-
-            pub fn build(&self) -> ServerConfig<'a> {
-                ServerConfig {
-                    host: self.host.expect("Invalid host"),
-                    ports: self.ports.clone().expect("Invalid ports"),
-                    default_error_paths: self.default_error_paths.clone().expect("Invalid paths"),
-                    body_size_limit: self.body_size_limit.expect("Invalid size limit"),
-                    routes: self.routes.clone().expect("Invalid routes"),
-                }
-            }
-        }
-    }
-
     pub mod route {
         use crate::cgi::Cgi;
         use crate::type_aliases::{FileExtension, Path};
@@ -209,7 +142,6 @@ pub mod server {
         servers
     }
 
-    // Refactor this to its own module.
     pub fn start(mut servers: Vec<Server>) {
         loop {
             for server in &mut servers {
