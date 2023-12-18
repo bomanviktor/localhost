@@ -10,7 +10,7 @@ use crate::client::version::get_version;
 use crate::client::{content_type, format};
 use crate::server_config::ServerConfig;
 use http::header::{CONTENT_LENGTH, CONTENT_TYPE, HOST};
-use http::{Method, Request, Response, StatusCode};
+use http::{Method, Request, Response, StatusCode, Version};
 use std::fmt::Display;
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -18,7 +18,7 @@ use std::net::TcpStream;
 const STATE_CHANGING_METHODS: [Method; 4] =
     [Method::PUT, Method::POST, Method::PATCH, Method::DELETE];
 
-pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
+pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) {
     let mut buffer = [0; 1024];
 
     // Attempt to read the stream into the buffer
@@ -36,7 +36,21 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
         }
     };
 
-    let version = get_version(&request_str);
+    let version = match get_version(&request_str) {
+        Ok(v) => v,
+        Err(_) => {
+            serve_response(
+                stream,
+                server_error(
+                    StatusCode::HTTP_VERSION_NOT_SUPPORTED,
+                    config,
+                    Version::HTTP_11,
+                ),
+            );
+            return;
+        }
+    };
+
     let path = get_path(&request_str);
     let method = match get_method(&request_str) {
         Ok(method) => method,
@@ -170,7 +184,7 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
     serve_response(stream, resp)
 }
 
-fn serve_response<T: Display>(mut stream: TcpStream, response: Response<T>) {
+fn serve_response<T: Display>(stream: &mut TcpStream, response: Response<T>) {
     if let Err(error) = stream.write_all(&format(response)) {
         eprintln!("Error writing response: {error}");
     }

@@ -128,19 +128,19 @@ pub mod path {
 pub mod version {
     use http::{StatusCode, Version};
 
-    pub fn get_version(req: &str) -> Version {
+    pub fn get_version(req: &str) -> Result<Version, StatusCode> {
         let version_str = req
             .split_whitespace()
             .find(|s| s.contains("HTTP/"))
             .unwrap_or("HTTP/1.1");
 
         match version_str {
-            "HTTP/0.9" => Version::HTTP_09,
-            "HTTP/1.0" => Version::HTTP_10,
-            "HTTP/1.1" => Version::HTTP_11,
-            "HTTP/2.0" => Version::HTTP_2,
-            "HTTP/3.0" => Version::HTTP_3,
-            _ => Version::HTTP_11,
+            "HTTP/0.9" => Ok(Version::HTTP_09),
+            "HTTP/1.0" => Ok(Version::HTTP_10),
+            "HTTP/1.1" => Ok(Version::HTTP_11),
+            "HTTP/2.0" => Ok(Version::HTTP_2),
+            "HTTP/3.0" => Ok(Version::HTTP_3),
+            _ => Err(StatusCode::HTTP_VERSION_NOT_SUPPORTED),
         }
     }
 }
