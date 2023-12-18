@@ -84,7 +84,7 @@ pub mod server_config {
     }
 
     pub mod route {
-        use crate::server_config::route::cgi::Cgi;
+        use crate::cgi::Cgi;
         use crate::type_aliases::{FileExtension, Path};
         use std::collections::HashMap;
 
@@ -111,16 +111,42 @@ pub mod server_config {
                 }
             }
         }
+    }
+}
 
-        pub mod cgi {
-            #[derive(Clone, Debug)]
-            pub enum Cgi {
-                Python,
-                PHP,
-                JavaScript,
-                Cpp,
-            }
-        }
+pub mod cgi {
+    #[derive(Clone, Debug)]
+    pub enum Cgi {
+        Ada,
+        C,
+        CSharp,
+        Cpp,
+        D,
+        Erlang,
+        Fortran,
+        Go,
+        Groovy,
+        Haskell,
+        Java,
+        JavaScript,
+        Julia,
+        Kotlin,
+        Lua,
+        Nim,
+        ObjectiveC,
+        OCaml,
+        Pascal,
+        Perl,
+        PHP,
+        Python,
+        R,
+        Ruby,
+        Rust,
+        Scala,
+        Shell,
+        Swift,
+        TypeScript,
+        Zig,
     }
 }
 pub mod type_aliases {
