@@ -3,7 +3,8 @@
 # Print the CGI headers
 puts "HTTP/1.1 200"
 puts "Host: 127.0.0.1"
-puts "Content-type: text/html\n"
+puts "Content-type: text/html"
+puts
 
 # Print the HTML content with "Hello World" and specified font-family
 puts "<html><head><style>"
