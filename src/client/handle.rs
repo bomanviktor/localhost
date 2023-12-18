@@ -49,8 +49,6 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
         }
     };
 
-    println!("{path}");
-
     let mut request = Request::builder()
         .method(&method)
         .uri(path)
@@ -62,7 +60,7 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
         }
     }
 
-    let body = get_body(&request_str, config.body_size_limit).unwrap_or("");
+    let body = get_body(&request_str, config.body_size_limit).unwrap_or("".to_string());
     let request = request.body(body).unwrap();
 
     // Get the route assigned to the path
@@ -113,9 +111,9 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
     }
 
     let mut resp = Response::builder()
+        .status(StatusCode::OK)
         .version(version)
-        .header(HOST, config.host)
-        .status(StatusCode::OK);
+        .header(HOST, config.host);
 
     // State changing http methods
     if STATE_CHANGING_METHODS.contains(&method) {
@@ -152,19 +150,22 @@ pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
             );
         } else {
             handle_method(route, path, method, Some(to_bytes(request.body())));
-            let resp = resp.body(*request.body()).unwrap();
+            let resp = resp.body(request.body()).unwrap();
             serve_response(stream, resp);
         }
         return;
     }
 
     let body = handle_method(route, path, method, None);
-    let resp = resp
-        .header(CONTENT_TYPE, content_type(&request_str))
-        .body(String::from_utf8(body.unwrap_or_default()).unwrap())
-        .unwrap();
 
-    serve_response(stream, resp)
+    let resp = if body.is_some() {
+        resp.header(CONTENT_TYPE, content_type(&request_str))
+            .body(String::from_utf8(body.unwrap_or_default()).unwrap())
+    } else {
+        resp.body("".to_string())
+    };
+
+    serve_response(stream, resp.unwrap())
 }
 
 fn serve_response<T: Display>(mut stream: TcpStream, response: Response<T>) {

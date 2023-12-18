@@ -12,10 +12,10 @@ pub fn format<T: Display>(response: Response<T>) -> Bytes {
     let mut resp = format!("{version:?} {status}\n");
 
     // Get all headers into the response
-    for (name, value) in response.headers() {
-        let name = name.to_string();
+    for (key, value) in response.headers() {
+        let key = key.to_string();
         let value = value.to_str().unwrap();
-        let header = format!("{name}: {value}\n");
+        let header = format!("{key}: {value}\n");
         resp.push_str(&header);
     }
 

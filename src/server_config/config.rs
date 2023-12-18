@@ -22,7 +22,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 "/path1",
                 "/path2",
                 "/cgi/python.py",
-                "/cgi/php-test.php",
+                "/cgi/php.php",
                 "/cgi/javascript.js",
                 "/cgi/ruby.rb",
             ],
