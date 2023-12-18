@@ -104,8 +104,14 @@ pub mod server {
     use crate::server_config::config::server_config;
     use crate::server_config::ServerConfig;
     pub use crate::type_aliases::Port;
+
+    use mio::net::TcpListener;
+    use mio::{Events, Interest, Poll, Token};
+    use std::collections::HashMap;
     use std::io::ErrorKind;
-    use std::net::TcpListener;
+
+    use std::net::SocketAddr;
+    use std::sync::Arc;
 
     #[derive(Debug)]
     pub struct Server<'a> {
@@ -127,9 +133,8 @@ pub mod server {
             for port in &config.ports {
                 // Create a listener for each port
                 let address = format!("{}:{}", config.host, port);
-                match TcpListener::bind(&address) {
+                match TcpListener::bind(address.parse::<SocketAddr>().unwrap()) {
                     Ok(listener) => {
-                        listener.set_nonblocking(true).unwrap();
                         listeners.push(listener);
                         println!("Server listening on {}", address);
                     }
@@ -143,21 +148,68 @@ pub mod server {
     }
 
     pub fn start(mut servers: Vec<Server>) {
+        let mut poll = match Poll::new() {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("Failed to create Poll instance: {}", e);
+                return;
+            }
+        };
+        let mut events = Events::with_capacity(128);
+        let mut server_tokens = HashMap::new();
+        let listeners = Vec::new();
+
+        let mut token_id = 0; // Initialize a token counter
+
+        let mut listener_tokens = HashMap::new();
+        for server in servers.iter_mut() {
+            let config = Arc::new(server.config.clone()); // Clone the config for shared ownership
+            for listener in &mut server.listeners {
+                let token = Token(token_id);
+                token_id += 1; // Increment the token counter for the next listener
+
+                // Register the listener to the poll instance
+                match poll
+                    .registry()
+                    .register(listener, token, Interest::READABLE)
+                {
+                    Ok(_) => {
+                        server_tokens.insert(token, Arc::clone(&config));
+                        listener_tokens.insert(token, listener);
+                    }
+                    Err(e) => {
+                        eprintln!("Error registering listener: {}", e);
+                        continue;
+                    }
+                };
+            }
+        }
+
+        let mut listener_indices = HashMap::new();
+        for (index, listener) in listeners.iter().enumerate() {
+            let token = listener_tokens
+                .keys()
+                .find(|&token| std::ptr::eq(listener_tokens[token], listener))
+                .unwrap();
+            listener_indices.insert(token, index);
+        }
+
         loop {
-            for server in &mut servers {
-                for listener in &mut server.listeners {
-                    match listener.accept() {
-                        Ok((stream, _addr)) => handle_client(stream, &server.config),
-                        Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                            // No incoming connections, continue to the next listener
-                            continue;
+            poll.poll(&mut events, None).unwrap();
+
+            for event in events.iter() {
+                println!("Event: {:?}", event);
+                if let Some(config) = server_tokens.get(&event.token()) {
+                    // Access the listener directly from listener_tokens map
+                    if let Some(listener) = listener_tokens.get_mut(&event.token()) {
+                        match listener.accept() {
+                            Ok((stream, _)) => handle_client(stream, config),
+                            Err(ref e) if e.kind() == ErrorKind::WouldBlock => (),
+                            Err(e) => eprintln!("Error: {}", e),
                         }
-                        Err(e) => eprintln!("Error accepting connection: {}", e),
                     }
                 }
             }
-            // Sleep for a short duration to avoid busy waiting
-            std::thread::sleep(std::time::Duration::from_millis(100));
         }
     }
 }

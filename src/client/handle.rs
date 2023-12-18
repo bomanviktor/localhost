@@ -11,14 +11,15 @@ use crate::client::{content_type, format};
 use crate::server_config::ServerConfig;
 use http::header::{CONTENT_LENGTH, CONTENT_TYPE, HOST};
 use http::{Method, Request, Response, StatusCode};
+use mio::net::TcpStream;
 use std::fmt::Display;
 use std::io::{Read, Write};
-use std::net::TcpStream;
 
 const STATE_CHANGING_METHODS: [Method; 4] =
     [Method::PUT, Method::POST, Method::PATCH, Method::DELETE];
 
 pub fn handle_client(mut stream: TcpStream, config: &ServerConfig) {
+    println!("hello");
     let mut buffer = [0; 1024];
 
     // Attempt to read the stream into the buffer
