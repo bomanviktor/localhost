@@ -8,7 +8,7 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
 
     let bytes_read = stream.read(&mut buffer)?;
 
-    let request_string = match String::from_utf8(buffer[..=bytes_read].to_vec()) {
+    let request_string = match String::from_utf8(buffer[..bytes_read].to_vec()) {
         Ok(request_str) => request_str,
         Err(e) => {
             eprintln!("Error reading from buffer to string: {e}");
@@ -70,21 +70,7 @@ fn handle_safe_request(
     config: &ServerConfig,
     route: &Route,
 ) -> Result<Response<Bytes>, StatusCode> {
-    let path = &req.uri().to_string();
-    let body = handle_method(route, path, req.method(), None).unwrap_or_default();
-    if body.is_empty() && req.method() == Method::GET {
-        return Err(StatusCode::NOT_FOUND);
-    }
-
-    let resp = Response::builder()
-        .status(StatusCode::OK)
-        .version(req.version())
-        .header(HOST, config.host)
-        .header(CONTENT_TYPE, content_type(path))
-        .header(CONTENT_LENGTH, body.len())
-        .body(body)
-        .unwrap();
-
+    let resp = handle_method(route, req, config).unwrap_or_default();
     Ok(resp)
 }
 

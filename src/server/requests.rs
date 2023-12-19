@@ -26,10 +26,17 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
 
 pub mod method {
     use super::{FromStr, Method, Route};
-    use crate::server::utils::{get_line, get_split_index};
+    use crate::server::utils::{get_line, get_split_index, to_bytes};
     use crate::type_aliases::{Bytes, Path};
     use http::method::InvalidMethod;
     use std::fs;
+    use std::io::Error;
+    use std::string::FromUtf8Error;
+    use http::{Request, Response, StatusCode};
+    use http::header::{CONTENT_LENGTH, CONTENT_TYPE, HOST};
+    use http::response::Builder;
+    use crate::server::content_type;
+    use crate::server_config::ServerConfig;
 
     pub fn get_method(req: &str) -> Result<Method, InvalidMethod> {
         let line = get_line(req, 0);
@@ -44,17 +51,19 @@ pub mod method {
 
     pub fn handle_method(
         route: &Route,
-        path: Path,
-        method: &Method,
-        body: Option<Bytes>,
-    ) -> Option<Bytes> {
-        let path = &route.format_path(path);
+        req: &Request<String>,
+        config: &ServerConfig
+    ) -> Result<Response<Bytes>, Error> {
 
-        match *method {
-            Method::GET => Some(get(path).unwrap_or_default()),
-            Method::HEAD => None,
+        let resp = Response::builder()
+            .version(req.version())
+            .header(HOST, config.host);
+
+        let resp = match *req.method() {
+            Method::GET => get(req, resp),
+            // Method::HEAD => head(req, resp),
             Method::POST => {
-                post(path, body.unwrap()).unwrap_or_default();
+                post(path, req, resp).unwrap_or_default();
                 None
             }
             Method::PUT => {
@@ -73,8 +82,20 @@ pub mod method {
         }
     }
 
-    pub fn get(path: Path) -> std::io::Result<Bytes> {
-        fs::read(path)
+    pub fn get(req: &Request<String>, resp: Builder) -> Result<Response<String>, Error> {
+        let path = &req.uri().to_string();
+        let body = match fs::read(to_bytes(path)) {
+            Ok(bytes) => String::from_utf8(bytes).unwrap(),
+            Err(e) => return Err(e)
+        };
+
+        let resp = resp
+            .status(StatusCode::OK)
+            .header(CONTENT_TYPE, content_type(path))
+            .body(body)
+            .unwrap();
+
+        Ok(resp)
     }
 
     pub fn post(path: Path, bytes: Bytes) -> std::io::Result<()> {
