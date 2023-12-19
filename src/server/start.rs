@@ -29,39 +29,76 @@ pub fn servers() -> Vec<Server<'static>> {
     servers
 }
 
-const INITIAL_TOKEN_ID: usize = 0;
+struct ServerState<'a> {
+    poll: Poll,
+    events: Events,
+    token_id: usize,
+    all_listeners: Vec<TcpListener>, // Replace with the actual type of your listeners
+    clients: Vec<Client<'a>>, // Replace with the actual type of your clients
+    connections: HashMap<Token, (TcpStream, Arc<ServerConfig<'a>>)>,
+    to_close: Vec<Token>,
+}
 
-pub fn start(servers: Vec<Server<'static>>) {
+fn initialize_server_state(servers: Vec<Server<'static>>) -> ServerState<'static> {
     let mut poll = Poll::new().expect("Failed to create Poll instance");
-    let mut events = Events::with_capacity(1024);
+    let events = Events::with_capacity(1024);
     let mut token_id = INITIAL_TOKEN_ID;
     let mut all_listeners = Vec::new();
-    let mut listener_configs = Vec::new();
-    let mut connections = HashMap::new();
-    let mut to_close = Vec::new(); // List of connections to close
+    let mut clients = Vec::new();
+    let connections = HashMap::new();
+    let to_close = Vec::new();
 
     for server in servers {
         register_listeners(
             &mut poll,
             &mut all_listeners,
             &mut token_id,
-            &mut listener_configs,
+            &mut clients,
             server,
         );
     }
 
+    ServerState {
+        poll,
+        events,
+        token_id,
+        all_listeners,
+        clients,
+        connections,
+        to_close,
+    }
+}
+
+fn poll_and_handle_events(server_state: &mut ServerState<'static>) {
+    server_state
+        .poll
+        .poll(&mut server_state.events, None)
+        .expect("Poll failed");
+
+    for event in server_state.events.iter() {
+        let token = event.token();
+        if let Some(client) = server_state.clients
+            .iter()
+            .find(|client| token == Token(client.id + INITIAL_TOKEN_ID))
+        {
+            let listener = &mut server_state.all_listeners[client.id];
+
+            while accept_connection(&mut server_state.poll, listener, &mut server_state.token_id, client, &mut server_state.connections) {}
+        }
+        handle_existing_connection(&mut server_state.to_close, token, &mut server_state.connections);
+
+        // Handle events using server_state
+        // You can pass server_state to other functions as needed
+    }
+}
+
+const INITIAL_TOKEN_ID: usize = 0;
+
+pub fn start(servers: Vec<Server<'static>>) {
+    let mut server_state = initialize_server_state(servers);
     loop {
-        poll.poll(&mut events, None).expect("Poll failed");
-        handle_events(
-            &mut poll,
-            &events,
-            &listener_configs,
-            &mut all_listeners,
-            &mut token_id,
-            &mut connections,
-            &mut to_close,
-        );
-        close_marked_connections(&mut poll, &mut connections, &to_close);
+        poll_and_handle_events(&mut server_state);
+        close_marked_connections(&mut server_state);
     }
 }
 
@@ -89,30 +126,6 @@ fn register_listeners(
             config: Arc::clone(&config),
         });
     });
-}
-
-fn handle_events<'a>(
-    poll: &mut Poll,
-    events: &Events,
-    listener_configs: &[Client<'a>],
-    all_listeners: &mut [TcpListener], // Replace with the actual type of your listeners
-    token_id: &mut usize,
-    connections: &mut HashMap<Token, (TcpStream, Arc<ServerConfig<'a>>)>,
-    to_close: &mut Vec<Token>,
-) {
-    for event in events.iter() {
-        let token = event.token();
-        // Find and accept the connection
-        if let Some(listener_config) = listener_configs
-            .iter()
-            .find(|client| token == Token(client.id + INITIAL_TOKEN_ID))
-        {
-            let listener = &mut all_listeners[listener_config.id];
-
-            while accept_connection(poll, listener, token_id, listener_config, connections) {}
-        }
-        handle_existing_connection(to_close, token, connections);
-    }
 }
 
 fn accept_connection<'a>(
@@ -155,14 +168,10 @@ fn handle_existing_connection(
     to_close.push(token);
 }
 
-fn close_marked_connections(
-    poll: &mut Poll,
-    connections: &mut HashMap<Token, (TcpStream, Arc<ServerConfig>)>,
-    to_close: &Vec<Token>,
-) {
-    for token in to_close {
-        if let Some((mut stream, _)) = connections.remove(token) {
-            poll.registry()
+fn close_marked_connections(server_state: &mut ServerState<'static>) {
+    for token in server_state.to_close.iter() {
+        if let Some((mut stream, _)) = server_state.connections.remove(token) {
+            server_state.poll.registry()
                 .deregister(&mut stream)
                 .expect("Failed to deregister stream");
         }
