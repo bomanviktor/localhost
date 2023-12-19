@@ -18,21 +18,13 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
         ]),
         body_size_limit: 1024,
         routes: vec![Route {
-            paths: vec![
-                "/path1",
-                "/path2",
-                "/test.png",
-                "/cgi/python.py",
-                "/cgi/php.php",
-                "/cgi/javascript.js",
-                "/cgi/ruby.rb",
-            ],
+            path: "/path1",
             accepted_http_methods: vec![
                 http::Method::GET,
                 http::Method::POST,
                 http::Method::OPTIONS,
             ],
-            http_redirections: HashMap::from([("/test1", "/path1"), ("/test2", "/path2")]),
+            http_redirections: vec!["/test1"],
             redirect_status_code: StatusCode::PERMANENT_REDIRECT,
             root_path: Some("src"),
             default_if_url_is_dir: "some default",

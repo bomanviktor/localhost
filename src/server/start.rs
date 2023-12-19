@@ -5,6 +5,7 @@ use crate::server::{
 };
 use crate::server_config::{server_config, ServerConfig};
 use std::io::ErrorKind;
+use std::time::Duration;
 
 pub fn servers() -> Vec<Server<'static>> {
     let mut servers = Vec::new();
@@ -42,7 +43,7 @@ pub fn start(servers: Vec<Server<'static>>) {
 fn poll_and_handle_events(state: &mut ServerState<'static>) {
     state
         .poll
-        .poll(&mut state.events, None)
+        .poll(&mut state.events, Some(Duration::from_millis(50)))
         .expect("Poll failed");
 
     for event in state.events.iter() {

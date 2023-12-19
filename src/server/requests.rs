@@ -20,19 +20,18 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
         }
     }
 
-    let body = body::get_body(req_str, conf.body_size_limit).unwrap_or("".to_string());
+    let body = body::get_body(req_str, conf.body_size_limit).unwrap_or(" ".to_string());
     Ok(request.body(body).unwrap())
 }
 
 pub mod method {
     use super::{FromStr, Method, Route};
     use crate::server::content_type;
-    use crate::server::utils::{get_line, get_split_index, to_bytes};
+    use crate::server::utils::{get_line, get_split_index};
     use crate::server_config::ServerConfig;
-    use crate::type_aliases::{Bytes, Path};
-    use http::header::{ALLOW, CONTENT_LENGTH, CONTENT_TYPE, HOST};
+    use crate::type_aliases::Bytes;
+    use http::header::{ALLOW, CONTENT_TYPE, HOST};
     use http::method::InvalidMethod;
-    use http::response::Builder;
     use http::{Request, Response, StatusCode};
     use std::fs;
 
@@ -51,14 +50,10 @@ pub mod method {
         route: &Route,
         req: &Request<String>,
         config: &ServerConfig,
-    ) -> Result<Response<String>, StatusCode> {
-        let resp = Response::builder()
-            .version(req.version())
-            .header(HOST, config.host);
-
+    ) -> Result<Response<Bytes>, StatusCode> {
         let resp = match *req.method() {
-            Method::GET => get(req, resp),
-            Method::OPTIONS => fn_options(route, req, config),
+            Method::GET => get(req, config).unwrap_or_default(),
+            Method::OPTIONS => options(route, req, config).unwrap_or_default(),
             // Method::HEAD => head(req, resp),
             // Method::POST => {
             //     post(req, resp).unwrap_or_default();
@@ -76,20 +71,24 @@ pub mod method {
             //     delete(path).unwrap_or_default();
             //     None
             // }
-            _ => get(req, resp),
+            _ => get(req, config).unwrap_or_default(),
         };
-        return resp;
+        Ok(resp)
     }
 
-    pub fn get(req: &Request<String>, resp: Builder) -> Result<Response<String>, StatusCode> {
-        println!("GET");
+    pub fn get(
+        req: &Request<String>,
+        config: &ServerConfig,
+    ) -> Result<Response<Bytes>, StatusCode> {
         let path = &req.uri().to_string();
-        let body = match fs::read(path) {
-            Ok(bytes) => String::from_utf8(bytes).unwrap(),
-            Err(e) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+        let body = match fs::read(format!("src{path}")) {
+            Ok(bytes) => bytes,
+            Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
         };
 
-        let resp = resp
+        let resp = Response::builder()
+            .version(req.version())
+            .header(HOST, config.host)
             .status(StatusCode::OK)
             .header(CONTENT_TYPE, content_type(path))
             .body(body)
@@ -98,12 +97,11 @@ pub mod method {
         Ok(resp)
     }
 
-    pub fn fn_options(
+    pub fn options(
         route: &Route,
         req: &Request<String>,
         config: &ServerConfig,
-    ) -> Result<Response<String>, StatusCode> {
-        println!("OPTIONS");
+    ) -> Result<Response<Bytes>, StatusCode> {
         let allowed_methods = route
             .accepted_http_methods
             .iter()
@@ -116,8 +114,7 @@ pub mod method {
             .header(HOST, config.host)
             .status(StatusCode::OK)
             .header(ALLOW, allowed_methods)
-            .header(CONTENT_LENGTH, "0")
-            .body(String::new()) // Empty body for OPTIONS
+            .body(vec![12]) // Empty body for OPTIONS
             .unwrap();
 
         Ok(resp)
@@ -193,15 +190,11 @@ pub mod path {
         routes: &[Route<'a>],
     ) -> Option<(usize, &'a str)> {
         for (i, route) in routes.iter().enumerate() {
-            for &path in &route.paths {
-                if path == requested_path {
-                    return Some((i, path)); // Path is contained in the route
-                }
-                if route.http_redirections.contains_key(requested_path) {
-                    // Path is a part of the redirections
-                    let redirected_path = route.http_redirections.get(requested_path).unwrap();
-                    return path_exists(redirected_path, routes); // Recursively call itself to check for the redirected path
-                }
+            if route.path == requested_path {
+                return Some((i, route.path));
+            }
+            if route.http_redirections.contains(&requested_path) {
+                return Some((i, route.path));
             }
         }
         None // Path does not exist in allowed paths or in redirections
