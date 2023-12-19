@@ -63,7 +63,7 @@ pub mod method {
             Method::GET => get(req, resp),
             // Method::HEAD => head(req, resp),
             Method::POST => {
-                post(path, req, resp).unwrap_or_default();
+                post(req, resp).unwrap_or_default();
                 None
             }
             Method::PUT => {
@@ -79,14 +79,14 @@ pub mod method {
                 None
             }
             _ => Some(get(path).unwrap()),
-        }
+        };
     }
 
-    pub fn get(req: &Request<String>, resp: Builder) -> Result<Response<String>, Error> {
+    pub fn get(req: &Request<String>, resp: Builder) -> Result<Response<Bytes>, StatusCode> {
         let path = &req.uri().to_string();
         let body = match fs::read(to_bytes(path)) {
-            Ok(bytes) => String::from_utf8(bytes).unwrap(),
-            Err(e) => return Err(e)
+            Ok(bytes) => bytes,
+            Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR)
         };
 
         let resp = resp
@@ -98,10 +98,22 @@ pub mod method {
         Ok(resp)
     }
 
-    pub fn post(path: Path, bytes: Bytes) -> std::io::Result<()> {
+    pub fn post(req: Request<String>, response: Builder) -> Result<Response<Bytes>, StatusCode> {
+        let path = &req.uri().to_string();
+        let body = req.body().as_bytes().to_vec();
+
+        let resp = response
+            .status(StatusCode::CREATED)
+            .header(CONTENT_TYPE, content_type(path))
+            .body(body)
+            .unwrap();
+
         // Resource does not exist, so create it.
         if fs::metadata(path).is_err() {
-            return fs::write(path, bytes);
+            match fs::write(&path, body) {
+                Ok(_) => Ok(resp),
+                Err(e) => Err(StatusCode::BAD_REQUEST),
+            }
         }
 
         let mut path = String::from(path); // Turn the path into String
@@ -110,28 +122,31 @@ pub mod method {
 
         // If the file already exists, modify the path.
         // /foo.txt -> /foo(1).txt
-        while fs::metadata(&path).is_ok() {
+        if fs::metadata(&path).is_ok() {
             path.truncate(end);
             path.push_str(&format!("({})", i));
             path.push_str(&path.clone()[end..]);
             i += 1;
         }
 
-        fs::write(&path, bytes)
+        match fs::write(&path, body) {
+            Ok(_) => Ok(resp),
+            Err(e) => Err(StatusCode::BAD_REQUEST),
+        }
     }
 
-    pub fn put(path: Path, bytes: Bytes) -> std::io::Result<()> {
+    pub fn put(path: &str, bytes: Bytes) -> Result<Response<Bytes>, StatusCode> {
         fs::write(path, bytes)
     }
 
-    pub fn patch(path: Path, bytes: Bytes) -> std::io::Result<()> {
+    pub fn patch(path: &str, bytes: Bytes) -> Result<Response<Bytes>, StatusCode> {
         match fs::metadata(path) {
             Ok(_) => fs::write(path, bytes),
             Err(e) => Err(e),
         }
     }
 
-    pub fn delete(path: Path) -> std::io::Result<()> {
+    pub fn delete(path: &str) -> Result<Response<Bytes>, StatusCode> {
         match fs::remove_file(path) {
             Ok(_) => Ok(()),                    // Target was a file
             Err(_) => fs::remove_dir_all(path), // Target was a directory
