@@ -1,10 +1,39 @@
-use crate::client::utils::{get_line, get_split_index};
+use crate::server::body::get_body;
+use crate::server::headers::{format_header, get_headers};
+use crate::server::method::get_method;
+use crate::server::path::get_path;
+use crate::server::version::get_version;
 use crate::server_config::route::Route;
-use http::Method;
+use crate::server_config::ServerConfig;
+use http::{Method, Request, StatusCode};
 use std::str::FromStr;
 
+pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>, StatusCode> {
+    let version = match get_version(req_str) {
+        Ok(v) => v,
+        Err(_) => return Err(StatusCode::HTTP_VERSION_NOT_SUPPORTED),
+    };
+
+    let path = get_path(req_str);
+    let method = match get_method(req_str) {
+        Ok(method) => method,
+        Err(_) => return Err(StatusCode::METHOD_NOT_ALLOWED),
+    };
+    let mut request = Request::builder().method(method).uri(path).version(version);
+
+    for header in get_headers(req_str) {
+        if let Some((key, value)) = format_header(header) {
+            request = request.header(key, value);
+        }
+    }
+
+    let body = get_body(req_str, conf.body_size_limit).unwrap_or("".to_string());
+    Ok(request.body(body).unwrap())
+}
+
 pub mod method {
-    use super::{get_line, get_split_index, FromStr, Method, Route};
+    use super::{FromStr, Method, Route};
+    use crate::server::utils::{get_line, get_split_index};
     use crate::type_aliases::{Bytes, Path};
     use http::method::InvalidMethod;
     use std::fs;
@@ -23,12 +52,12 @@ pub mod method {
     pub fn handle_method(
         route: &Route,
         path: Path,
-        method: Method,
+        method: &Method,
         body: Option<Bytes>,
     ) -> Option<Bytes> {
         let path = &route.format_path(path);
 
-        match method {
+        match *method {
             Method::GET => Some(get(path).unwrap_or_default()),
             Method::HEAD => None,
             Method::POST => {
@@ -51,11 +80,11 @@ pub mod method {
         }
     }
 
-    pub fn get(path: &str) -> std::io::Result<Bytes> {
+    pub fn get(path: Path) -> std::io::Result<Bytes> {
         fs::read(path)
     }
 
-    pub fn post(path: &str, bytes: Bytes) -> std::io::Result<()> {
+    pub fn post(path: Path, bytes: Bytes) -> std::io::Result<()> {
         // Resource does not exist, so create it.
         if fs::metadata(path).is_err() {
             return fs::write(path, bytes);
@@ -77,18 +106,18 @@ pub mod method {
         fs::write(&path, bytes)
     }
 
-    pub fn put(path: &str, bytes: Bytes) -> std::io::Result<()> {
+    pub fn put(path: Path, bytes: Bytes) -> std::io::Result<()> {
         fs::write(path, bytes)
     }
 
-    pub fn patch(path: &str, bytes: Bytes) -> std::io::Result<()> {
+    pub fn patch(path: Path, bytes: Bytes) -> std::io::Result<()> {
         match fs::metadata(path) {
             Ok(_) => fs::write(path, bytes),
             Err(e) => Err(e),
         }
     }
 
-    pub fn delete(path: &str) -> std::io::Result<()> {
+    pub fn delete(path: Path) -> std::io::Result<()> {
         match fs::remove_file(path) {
             Ok(_) => Ok(()),                    // Target was a file
             Err(_) => fs::remove_dir_all(path), // Target was a directory
@@ -98,6 +127,7 @@ pub mod method {
 
 pub mod path {
     use super::*;
+    use crate::server::utils::{get_line, get_split_index};
     /// `path` gets the path from the `request`
     pub fn get_path(req: &str) -> &str {
         let line = get_line(req, 0);
@@ -126,27 +156,27 @@ pub mod path {
 }
 
 pub mod version {
-    use http::Version;
+    use http::{StatusCode, Version};
 
-    pub fn get_version(req: &str) -> Version {
+    pub fn get_version(req: &str) -> Result<Version, StatusCode> {
         let version_str = req
             .split_whitespace()
             .find(|s| s.contains("HTTP/"))
             .unwrap_or("HTTP/1.1");
 
         match version_str {
-            "HTTP/0.9" => Version::HTTP_09,
-            "HTTP/1.0" => Version::HTTP_10,
-            "HTTP/1.1" => Version::HTTP_11,
-            "HTTP/2.0" => Version::HTTP_2,
-            "HTTP/3.0" => Version::HTTP_3,
-            _ => Version::HTTP_11,
+            "HTTP/0.9" => Ok(Version::HTTP_09),
+            "HTTP/1.0" => Ok(Version::HTTP_10),
+            "HTTP/1.1" => Ok(Version::HTTP_11),
+            "HTTP/2.0" => Ok(Version::HTTP_2),
+            "HTTP/3.0" => Ok(Version::HTTP_3),
+            _ => Err(StatusCode::HTTP_VERSION_NOT_SUPPORTED),
         }
     }
 }
 
 pub mod headers {
-    use super::get_split_index;
+    use crate::server::utils::get_split_index;
 
     pub fn get_headers(req: &str) -> Vec<&str> {
         // Remove the body from the request
@@ -242,11 +272,11 @@ pub mod utils {
     use crate::type_aliases::Bytes;
 
     /// `get_split_index` gets the `&str` at `index` after performing `split_whitespace`
-    pub fn get_split_index(s: &str, index: usize) -> &str {
-        let lines = s.split_whitespace().collect::<Vec<&str>>();
+    pub fn get_split_index(str: &str, index: usize) -> &str {
+        let lines = str.split_whitespace().collect::<Vec<&str>>();
         if lines.is_empty() {
             ""
-        } else if index >= lines.len() {
+        } else if index > lines.len() {
             lines[0]
         } else {
             lines[index]
@@ -254,16 +284,17 @@ pub mod utils {
     }
 
     /// `get_line` gets the `&str` at `index` after performing `split('\n')`
-    pub fn get_line(s: &str, index: usize) -> &str {
-        let lines = s
+    pub fn get_line(str: &str, index: usize) -> &str {
+        let lines = str
             .trim_end_matches('\0')
             .split("\r\n")
             .collect::<Vec<&str>>();
-
-        if index > lines.len() {
-            lines[0] // Index out of bounds
+        if lines.is_empty() {
+            ""
+        } else if index > lines.len() {
+            lines[0]
         } else {
-            lines[index] // Index in bounds
+            lines[index]
         }
     }
 

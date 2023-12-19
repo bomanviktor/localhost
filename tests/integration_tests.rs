@@ -19,8 +19,9 @@ mod test_requests {
     use http::StatusCode;
     mod utils {
         use super::*;
-        use localhost::client::utils::get_split_index;
+        use localhost::server::utils::get_split_index;
         use std::str::FromStr;
+
         pub fn get_status(header: &str) -> StatusCode {
             let status = get_split_index(header, 1);
             StatusCode::from_str(status).unwrap_or(StatusCode::OK)
