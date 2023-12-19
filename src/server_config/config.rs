@@ -21,6 +21,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
             paths: vec![
                 "/path1",
                 "/path2",
+                "/test.png",
                 "/cgi/python.py",
                 "/cgi/php.php",
                 "/cgi/javascript.js",

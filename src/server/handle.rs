@@ -65,7 +65,10 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
 }
 
 pub fn serve_response(stream: &mut TcpStream, response: Response<Bytes>) -> io::Result<()> {
-    stream.write_all(&format(response))?;
+    unsafe {
+        stream.write_all(&format(response))?;
+    }
+
     match stream.flush() {
         Ok(_) => Ok(()),
         Err(e) => Err(e),
@@ -79,7 +82,7 @@ fn handle_safe_request(
 ) -> Result<Response<Bytes>, StatusCode> {
     let path = &req.uri().to_string();
     let body = handle_method(route, path, req.method(), None).unwrap_or_default();
-    if body.is_empty() && !route.accepted_http_methods.contains(&Method::HEAD) {
+    if body.is_empty() && req.method() == Method::GET {
         return Err(StatusCode::NOT_FOUND);
     }
 
@@ -88,8 +91,10 @@ fn handle_safe_request(
         .version(req.version())
         .header(HOST, config.host)
         .header(CONTENT_TYPE, content_type(path))
+        .header(CONTENT_LENGTH, body.len())
         .body(body)
         .unwrap();
+
     Ok(resp)
 }
 

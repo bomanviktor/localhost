@@ -3,8 +3,12 @@ use crate::server_config::ServerConfig;
 use crate::type_aliases::Bytes;
 use http::{Response, StatusCode, Version};
 use std::fs;
+use std::str::from_utf8_unchecked;
 
-pub fn format(response: Response<Bytes>) -> Bytes {
+/// # Safety
+///
+/// This function will call the unsafe method `from_utf8_unchecked`
+pub unsafe fn format(response: Response<Bytes>) -> Bytes {
     let version = response.version();
     let binding = response.status();
     let status = binding.as_str();
@@ -17,22 +21,15 @@ pub fn format(response: Response<Bytes>) -> Bytes {
         let header = format!("{key}: {value}\r\n");
         resp.push_str(&header);
     }
-    println!("{resp}");
+
     let body = response.body().clone();
     if !body.is_empty() {
-        if is_binary_data(&body) {
-            resp.push_str(&format!("\r\n{:?}", body));
-        } else {
-            resp.push_str(&format!("\r\n{}", String::from_utf8(body).unwrap()));
+        unsafe {
+            resp.push_str(&format!("\r\n{}", from_utf8_unchecked(&body)));
         }
     }
 
     to_bytes(&resp)
-}
-
-fn is_binary_data(data: &[u8]) -> bool {
-    data.iter()
-        .any(|&byte| byte < 0x20 && !b"\t\n\r".contains(&byte))
 }
 
 pub fn content_type(path: &str) -> String {
