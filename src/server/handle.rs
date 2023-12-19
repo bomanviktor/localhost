@@ -108,8 +108,6 @@ fn handle_unsafe_request(
         return Err(StatusCode::PAYLOAD_TOO_LARGE);
     }
 
-    let path = &req.uri().to_string();
-    let body = req.body().clone().as_bytes().to_vec();
-    handle_method(route, path, req.method(), Some(body.clone()));
+    let body = handle_method(route, req, config).unwrap_or_default();
     Ok(resp.body(body).unwrap())
 }

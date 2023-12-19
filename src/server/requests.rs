@@ -26,17 +26,15 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
 
 pub mod method {
     use super::{FromStr, Method, Route};
-    use crate::server::utils::{get_line, get_split_index, to_bytes};
-    use crate::type_aliases::{Bytes, Path};
-    use http::method::InvalidMethod;
-    use std::fs;
-    use std::io::Error;
-    use std::string::FromUtf8Error;
-    use http::{Request, Response, StatusCode};
-    use http::header::{CONTENT_LENGTH, CONTENT_TYPE, HOST};
-    use http::response::Builder;
     use crate::server::content_type;
+    use crate::server::utils::{get_line, get_split_index, to_bytes};
     use crate::server_config::ServerConfig;
+    use crate::type_aliases::{Bytes, Path};
+    use http::header::{ALLOW, CONTENT_LENGTH, CONTENT_TYPE, HOST};
+    use http::method::InvalidMethod;
+    use http::response::Builder;
+    use http::{Request, Response, StatusCode};
+    use std::fs;
 
     pub fn get_method(req: &str) -> Result<Method, InvalidMethod> {
         let line = get_line(req, 0);
@@ -52,41 +50,43 @@ pub mod method {
     pub fn handle_method(
         route: &Route,
         req: &Request<String>,
-        config: &ServerConfig
-    ) -> Result<Response<Bytes>, Error> {
-
+        config: &ServerConfig,
+    ) -> Result<Response<String>, StatusCode> {
         let resp = Response::builder()
             .version(req.version())
             .header(HOST, config.host);
 
         let resp = match *req.method() {
             Method::GET => get(req, resp),
+            Method::OPTIONS => fn_options(route, req, config),
             // Method::HEAD => head(req, resp),
-            Method::POST => {
-                post(req, resp).unwrap_or_default();
-                None
-            }
-            Method::PUT => {
-                put(path, body.unwrap()).unwrap_or_default();
-                None
-            }
-            Method::PATCH => {
-                patch(path, body.unwrap()).unwrap_or_default();
-                None
-            }
-            Method::DELETE => {
-                delete(path).unwrap_or_default();
-                None
-            }
-            _ => Some(get(path).unwrap()),
+            // Method::POST => {
+            //     post(req, resp).unwrap_or_default();
+            //     None
+            // }
+            // Method::PUT => {
+            //     put(path, body.unwrap()).unwrap_or_default();
+            //     None
+            // }
+            // Method::PATCH => {
+            //     patch(path, body.unwrap()).unwrap_or_default();
+            //     None
+            // }
+            // Method::DELETE => {
+            //     delete(path).unwrap_or_default();
+            //     None
+            // }
+            _ => get(req, resp),
         };
+        return resp;
     }
 
-    pub fn get(req: &Request<String>, resp: Builder) -> Result<Response<Bytes>, StatusCode> {
+    pub fn get(req: &Request<String>, resp: Builder) -> Result<Response<String>, StatusCode> {
+        println!("GET");
         let path = &req.uri().to_string();
-        let body = match fs::read(to_bytes(path)) {
-            Ok(bytes) => bytes,
-            Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR)
+        let body = match fs::read(path) {
+            Ok(bytes) => String::from_utf8(bytes).unwrap(),
+            Err(e) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
         };
 
         let resp = resp
@@ -98,60 +98,84 @@ pub mod method {
         Ok(resp)
     }
 
-    pub fn post(req: Request<String>, response: Builder) -> Result<Response<Bytes>, StatusCode> {
-        let path = &req.uri().to_string();
-        let body = req.body().as_bytes().to_vec();
+    pub fn fn_options(
+        route: &Route,
+        req: &Request<String>,
+        config: &ServerConfig,
+    ) -> Result<Response<String>, StatusCode> {
+        println!("OPTIONS");
+        let allowed_methods = route
+            .accepted_http_methods
+            .iter()
+            .map(|method| method.as_str())
+            .collect::<Vec<&str>>()
+            .join(", ");
 
-        let resp = response
-            .status(StatusCode::CREATED)
-            .header(CONTENT_TYPE, content_type(path))
-            .body(body)
+        let resp = Response::builder()
+            .version(req.version())
+            .header(HOST, config.host)
+            .status(StatusCode::OK)
+            .header(ALLOW, allowed_methods)
+            .header(CONTENT_LENGTH, "0")
+            .body(String::new()) // Empty body for OPTIONS
             .unwrap();
 
-        // Resource does not exist, so create it.
-        if fs::metadata(path).is_err() {
-            match fs::write(&path, body) {
-                Ok(_) => Ok(resp),
-                Err(e) => Err(StatusCode::BAD_REQUEST),
-            }
-        }
-
-        let mut path = String::from(path); // Turn the path into String
-        let end = path.rfind('.').unwrap_or(path.len());
-        let mut i = 1;
-
-        // If the file already exists, modify the path.
-        // /foo.txt -> /foo(1).txt
-        if fs::metadata(&path).is_ok() {
-            path.truncate(end);
-            path.push_str(&format!("({})", i));
-            path.push_str(&path.clone()[end..]);
-            i += 1;
-        }
-
-        match fs::write(&path, body) {
-            Ok(_) => Ok(resp),
-            Err(e) => Err(StatusCode::BAD_REQUEST),
-        }
+        Ok(resp)
     }
+    // pub fn post(req: Request<String>, response: Builder) -> Result<Response<String>, StatusCode> {
+    //     let path = &req.uri().to_string();
+    //     let body = &req.body().as_bytes().to_vec();
 
-    pub fn put(path: &str, bytes: Bytes) -> Result<Response<Bytes>, StatusCode> {
-        fs::write(path, bytes)
-    }
+    //     let resp = response
+    //         .status(StatusCode::CREATED)
+    //         .header(CONTENT_TYPE, content_type(path))
+    //         .body(body)
+    //         .unwrap();
 
-    pub fn patch(path: &str, bytes: Bytes) -> Result<Response<Bytes>, StatusCode> {
-        match fs::metadata(path) {
-            Ok(_) => fs::write(path, bytes),
-            Err(e) => Err(e),
-        }
-    }
+    //     // Resource does not exist, so create it.
+    //     if fs::metadata(path).is_err() {
+    //         match fs::write(&path, body) {
+    //             Ok(_) => Ok(resp),
+    //             Err(e) => Err(StatusCode::BAD_REQUEST),
+    //         }
+    //     }
 
-    pub fn delete(path: &str) -> Result<Response<Bytes>, StatusCode> {
-        match fs::remove_file(path) {
-            Ok(_) => Ok(()),                    // Target was a file
-            Err(_) => fs::remove_dir_all(path), // Target was a directory
-        }
-    }
+    //     let mut path = String::from(path); // Turn the path into String
+    //     let end = path.rfind('.').unwrap_or(path.len());
+    //     let mut i = 1;
+
+    //     // If the file already exists, modify the path.
+    //     // /foo.txt -> /foo(1).txt
+    //     if fs::metadata(&path).is_ok() {
+    //         path.truncate(end);
+    //         path.push_str(&format!("({})", i));
+    //         path.push_str(&path.clone()[end..]);
+    //         i += 1;
+    //     }
+
+    //     match fs::write(&path, body) {
+    //         Ok(_) => Ok(resp),
+    //         Err(e) => Err(StatusCode::BAD_REQUEST),
+    //     }
+    // }
+
+    // pub fn put(path: &str, bytes: Bytes) -> Result<Response<String>, StatusCode> {
+    //     fs::write(path, bytes)
+    // }
+
+    // pub fn patch(path: &str, bytes: Bytes) -> Result<Response<String>, StatusCode> {
+    //     match fs::metadata(path) {
+    //         Ok(_) => fs::write(path, bytes),
+    //         Err(e) => Err(e),
+    //     }
+    // }
+
+    // pub fn delete(path: &str) -> Result<Response<String>, StatusCode> {
+    //     match fs::remove_file(path) {
+    //         Ok(_) => Ok(()),                    // Target was a file
+    //         Err(_) => fs::remove_dir_all(path), // Target was a directory
+    //     }
+    // }
 }
 
 pub mod path {

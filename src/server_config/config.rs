@@ -27,7 +27,11 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 "/cgi/javascript.js",
                 "/cgi/ruby.rb",
             ],
-            accepted_http_methods: vec![http::Method::GET, http::Method::POST],
+            accepted_http_methods: vec![
+                http::Method::GET,
+                http::Method::POST,
+                http::Method::OPTIONS,
+            ],
             http_redirections: HashMap::from([("/test1", "/path1"), ("/test2", "/path2")]),
             redirect_status_code: StatusCode::PERMANENT_REDIRECT,
             root_path: Some("src"),
