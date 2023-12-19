@@ -1,11 +1,5 @@
-use crate::server::{handle_client, Client, Server};
+use crate::server::*;
 use crate::server_config::{server_config, ServerConfig};
-use mio::net::{TcpListener, TcpStream};
-use mio::{Events, Interest, Poll, Token};
-use std::collections::HashMap;
-use std::io::ErrorKind;
-use std::net::SocketAddr;
-use std::sync::Arc;
 
 pub fn servers() -> Vec<Server<'static>> {
     let mut servers = Vec::new();
@@ -29,103 +23,43 @@ pub fn servers() -> Vec<Server<'static>> {
     servers
 }
 
-struct ServerState<'a> {
-    poll: Poll,
-    events: Events,
-    token_id: usize,
-    all_listeners: Vec<TcpListener>, // Replace with the actual type of your listeners
-    clients: Vec<Client<'a>>, // Replace with the actual type of your clients
-    connections: HashMap<Token, (TcpStream, Arc<ServerConfig<'a>>)>,
-    to_close: Vec<Token>,
-}
+pub const INITIAL_TOKEN_ID: usize = 0;
 
-fn initialize_server_state(servers: Vec<Server<'static>>) -> ServerState<'static> {
-    let mut poll = Poll::new().expect("Failed to create Poll instance");
-    let events = Events::with_capacity(1024);
-    let mut token_id = INITIAL_TOKEN_ID;
-    let mut all_listeners = Vec::new();
-    let mut clients = Vec::new();
-    let connections = HashMap::new();
-    let to_close = Vec::new();
-
-    for server in servers {
-        register_listeners(
-            &mut poll,
-            &mut all_listeners,
-            &mut token_id,
-            &mut clients,
-            server,
-        );
-    }
-
-    ServerState {
-        poll,
-        events,
-        token_id,
-        all_listeners,
-        clients,
-        connections,
-        to_close,
+pub fn start(servers: Vec<Server<'static>>) {
+    let mut state = initialize_server_state(servers);
+    loop {
+        state.to_close.clear();
+        poll_and_handle_events(&mut state);
+        close_marked_connections(&mut state);
     }
 }
-
-fn poll_and_handle_events(server_state: &mut ServerState<'static>) {
-    server_state
+fn poll_and_handle_events(state: &mut ServerState<'static>) {
+    state
         .poll
-        .poll(&mut server_state.events, None)
+        .poll(&mut state.events, None)
         .expect("Poll failed");
 
-    for event in server_state.events.iter() {
+    for event in state.events.iter() {
         let token = event.token();
-        if let Some(client) = server_state.clients
+        if let Some(client) = state
+            .clients
             .iter()
             .find(|client| token == Token(client.id + INITIAL_TOKEN_ID))
         {
-            let listener = &mut server_state.all_listeners[client.id];
+            let listener = &mut state.all_listeners[client.id];
 
-            while accept_connection(&mut server_state.poll, listener, &mut server_state.token_id, client, &mut server_state.connections) {}
+            // Keep accepting connections until error.
+            while accept_connection(
+                &mut state.poll,
+                listener,
+                &mut state.token_id,
+                client,
+                &mut state.connections,
+            ) {}
         }
-        handle_existing_connection(&mut server_state.to_close, token, &mut server_state.connections);
 
-        // Handle events using server_state
-        // You can pass server_state to other functions as needed
+        handle_existing_connection(&mut state.to_close, token, &mut state.connections);
     }
-}
-
-const INITIAL_TOKEN_ID: usize = 0;
-
-pub fn start(servers: Vec<Server<'static>>) {
-    let mut server_state = initialize_server_state(servers);
-    loop {
-        poll_and_handle_events(&mut server_state);
-        close_marked_connections(&mut server_state);
-    }
-}
-
-fn register_listeners(
-    poll: &mut Poll,
-    all_listeners: &mut Vec<TcpListener>,
-    token_id: &mut usize,
-    clients: &mut Vec<Client>,
-    server: Server<'static>,
-) {
-    let config = Arc::new(server.config);
-
-    server.listeners.into_iter().for_each(|listener| {
-        let id = all_listeners.len();
-        all_listeners.push(listener);
-        let token = Token(*token_id);
-        *token_id += 1;
-
-        poll.registry()
-            .register(&mut all_listeners[id], token, Interest::READABLE)
-            .expect("Failed to register listener");
-
-        clients.push(Client {
-            id,
-            config: Arc::clone(&config),
-        });
-    });
 }
 
 fn accept_connection<'a>(
@@ -168,10 +102,12 @@ fn handle_existing_connection(
     to_close.push(token);
 }
 
-fn close_marked_connections(server_state: &mut ServerState<'static>) {
-    for token in server_state.to_close.iter() {
-        if let Some((mut stream, _)) = server_state.connections.remove(token) {
-            server_state.poll.registry()
+fn close_marked_connections(state: &mut ServerState<'static>) {
+    for token in state.to_close.iter() {
+        if let Some((mut stream, _)) = state.connections.remove(token) {
+            state
+                .poll
+                .registry()
                 .deregister(&mut stream)
                 .expect("Failed to deregister stream");
         }

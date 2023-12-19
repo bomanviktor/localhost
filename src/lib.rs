@@ -124,7 +124,11 @@ pub mod server {
     pub mod handle;
 
     pub use handle::*;
-    use mio::net::TcpListener;
+    use mio::net::{TcpListener, TcpStream};
+    use mio::{Events, Interest, Poll, Token};
+    use std::collections::HashMap;
+    use std::io::ErrorKind;
+    use std::net::SocketAddr;
     use std::sync::Arc;
 
     pub mod requests;
@@ -158,5 +162,55 @@ pub mod server {
     struct Client<'a> {
         id: usize,
         config: Arc<ServerConfig<'a>>,
+    }
+
+    struct ServerState<'a> {
+        poll: Poll,
+        events: Events,
+        token_id: usize,
+        all_listeners: Vec<TcpListener>, // Replace with the actual type of your listeners
+        clients: Vec<Client<'a>>,        // Replace with the actual type of your clients
+        connections: HashMap<Token, (TcpStream, Arc<ServerConfig<'a>>)>,
+        to_close: Vec<Token>,
+    }
+
+    fn initialize_server_state(servers: Vec<Server<'static>>) -> ServerState<'static> {
+        let poll = Poll::new().expect("Failed to create Poll instance");
+        let events = Events::with_capacity(1024);
+        let mut token_id = INITIAL_TOKEN_ID;
+        let mut all_listeners = Vec::new();
+        let mut clients = Vec::new();
+        let connections = HashMap::new();
+        let to_close = Vec::new();
+
+        for server in servers {
+            let config = Arc::new(server.config);
+
+            server.listeners.into_iter().for_each(|listener| {
+                let id = all_listeners.len();
+                all_listeners.push(listener);
+                let token = Token(token_id);
+                token_id += 1;
+
+                poll.registry()
+                    .register(&mut all_listeners[id], token, Interest::READABLE)
+                    .expect("Failed to register listener");
+
+                clients.push(Client {
+                    id,
+                    config: Arc::clone(&config),
+                });
+            });
+        }
+
+        ServerState {
+            poll,
+            events,
+            token_id,
+            all_listeners,
+            clients,
+            connections,
+            to_close,
+        }
     }
 }
