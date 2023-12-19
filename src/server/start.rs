@@ -31,7 +31,7 @@ pub fn servers() -> Vec<Server<'static>> {
 
 pub fn start(servers: Vec<Server<'static>>) {
     let mut poll = Poll::new().expect("Failed to create Poll instance");
-    let mut events = Events::with_capacity(128);
+    let mut events = Events::with_capacity(1024);
     let mut connections = HashMap::new();
     let mut token_id = 2; // Start token counting from 2
     let mut all_listeners = Vec::new(); // Store all listeners
@@ -105,9 +105,11 @@ pub fn start(servers: Vec<Server<'static>>) {
                     if e.kind() != ErrorKind::WouldBlock {
                         // Mark connection for closure
                         println!("Marking connection for closure due to error: {}", e);
-                        to_close.push(token);
+                    } else {
+                        continue;
                     }
                 }
+                to_close.push(token); // Close connection
             }
         }
         //  Close marked connections

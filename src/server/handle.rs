@@ -1,16 +1,15 @@
 use crate::server::errors::error;
 use crate::server::method::handle_method;
 use crate::server::redirections::redirect;
-use crate::server::utils::to_bytes;
 use crate::server::{
     content_type, execute_cgi_script, format, get_request, get_route, is_cgi_request,
 };
 use crate::server_config::route::Route;
 use crate::server_config::ServerConfig;
+use crate::type_aliases::Bytes;
 use http::header::{CONTENT_LENGTH, CONTENT_TYPE, HOST};
 use http::{Method, Request, Response, StatusCode};
 use mio::net::TcpStream;
-use std::fmt::Display;
 use std::io;
 use std::io::{Read, Write};
 
@@ -19,7 +18,7 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
 
     let bytes_read = stream.read(&mut buffer)?;
 
-    let request_string = match String::from_utf8(buffer[..bytes_read].to_vec()) {
+    let request_string = match String::from_utf8(buffer[..=bytes_read].to_vec()) {
         Ok(request_str) => request_str,
         Err(e) => {
             eprintln!("Error reading from buffer to string: {e}");
@@ -65,7 +64,7 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
     Ok(())
 }
 
-pub fn serve_response<T: Display>(stream: &mut TcpStream, response: Response<T>) -> io::Result<()> {
+pub fn serve_response(stream: &mut TcpStream, response: Response<Bytes>) -> io::Result<()> {
     stream.write_all(&format(response))?;
     match stream.flush() {
         Ok(_) => Ok(()),
@@ -77,7 +76,7 @@ fn handle_safe_request(
     req: &Request<String>,
     config: &ServerConfig,
     route: &Route,
-) -> Result<Response<String>, StatusCode> {
+) -> Result<Response<Bytes>, StatusCode> {
     let path = &req.uri().to_string();
     let body = handle_method(route, path, req.method(), None).unwrap_or_default();
     if body.is_empty() && !route.accepted_http_methods.contains(&Method::HEAD) {
@@ -89,7 +88,7 @@ fn handle_safe_request(
         .version(req.version())
         .header(HOST, config.host)
         .header(CONTENT_TYPE, content_type(path))
-        .body(String::from_utf8(body).unwrap())
+        .body(body)
         .unwrap();
     Ok(resp)
 }
@@ -98,7 +97,7 @@ fn handle_unsafe_request(
     req: &Request<String>,
     config: &ServerConfig,
     route: &Route,
-) -> Result<Response<String>, StatusCode> {
+) -> Result<Response<Bytes>, StatusCode> {
     let mut resp = Response::builder()
         .status(StatusCode::OK)
         .version(req.version())
@@ -129,7 +128,7 @@ fn handle_unsafe_request(
     }
 
     let path = &req.uri().to_string();
-    let body = req.body().clone();
-    handle_method(route, path, req.method(), Some(to_bytes(&body)));
+    let body = req.body().clone().as_bytes().to_vec();
+    handle_method(route, path, req.method(), Some(body.clone()));
     Ok(resp.body(body).unwrap())
 }

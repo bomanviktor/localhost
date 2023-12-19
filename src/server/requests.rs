@@ -80,11 +80,11 @@ pub mod method {
         }
     }
 
-    pub fn get(path: &str) -> std::io::Result<Bytes> {
+    pub fn get(path: Path) -> std::io::Result<Bytes> {
         fs::read(path)
     }
 
-    pub fn post(path: &str, bytes: Bytes) -> std::io::Result<()> {
+    pub fn post(path: Path, bytes: Bytes) -> std::io::Result<()> {
         // Resource does not exist, so create it.
         if fs::metadata(path).is_err() {
             return fs::write(path, bytes);
@@ -106,18 +106,18 @@ pub mod method {
         fs::write(&path, bytes)
     }
 
-    pub fn put(path: &str, bytes: Bytes) -> std::io::Result<()> {
+    pub fn put(path: Path, bytes: Bytes) -> std::io::Result<()> {
         fs::write(path, bytes)
     }
 
-    pub fn patch(path: &str, bytes: Bytes) -> std::io::Result<()> {
+    pub fn patch(path: Path, bytes: Bytes) -> std::io::Result<()> {
         match fs::metadata(path) {
             Ok(_) => fs::write(path, bytes),
             Err(e) => Err(e),
         }
     }
 
-    pub fn delete(path: &str) -> std::io::Result<()> {
+    pub fn delete(path: Path) -> std::io::Result<()> {
         match fs::remove_file(path) {
             Ok(_) => Ok(()),                    // Target was a file
             Err(_) => fs::remove_dir_all(path), // Target was a directory

@@ -2,29 +2,37 @@ use crate::server::utils::to_bytes;
 use crate::server_config::ServerConfig;
 use crate::type_aliases::Bytes;
 use http::{Response, StatusCode, Version};
-use std::fmt::Display;
 use std::fs;
 
-pub fn format<T: Display>(response: Response<T>) -> Bytes {
+pub fn format(response: Response<Bytes>) -> Bytes {
     let version = response.version();
     let binding = response.status();
     let status = binding.as_str();
-    let mut resp = format!("{version:?} {status}\n");
+    let mut resp = format!("{version:?} {status}\r\n");
 
     // Get all headers into the response
     for (key, value) in response.headers() {
         let key = key.to_string();
         let value = value.to_str().unwrap();
-        let header = format!("{key}: {value}\n");
+        let header = format!("{key}: {value}\r\n");
         resp.push_str(&header);
     }
-
-    let body = response.body().to_string();
+    println!("{resp}");
+    let body = response.body().clone();
     if !body.is_empty() {
-        resp.push_str(&format!("\n{body}"));
+        if is_binary_data(&body) {
+            resp.push_str(&format!("\r\n{:?}", body));
+        } else {
+            resp.push_str(&format!("\r\n{}", String::from_utf8(body).unwrap()));
+        }
     }
 
     to_bytes(&resp)
+}
+
+fn is_binary_data(data: &[u8]) -> bool {
+    data.iter()
+        .any(|&byte| byte < 0x20 && !b"\t\n\r".contains(&byte))
 }
 
 pub fn content_type(path: &str) -> String {
@@ -81,13 +89,13 @@ pub mod informational {
         status: StatusCode,
         config: &ServerConfig,
         version: Version,
-    ) -> Response<String> {
+    ) -> Response<Bytes> {
         http::Response::builder()
             .version(version)
             .header(HOST, config.host) // Replace with your actual header
             .header(SERVER, "grit:lab-localhost/1.0") // Replace with your actual server name and version
             .status(status)
-            .body("".to_string())
+            .body(vec![])
             .unwrap()
     }
 }
@@ -101,14 +109,14 @@ pub mod redirections {
         config: &ServerConfig,
         version: Version,
         path: String,
-    ) -> Response<String> {
+    ) -> Response<Bytes> {
         http::Response::builder()
             .version(version)
             .header(HOST, config.host)
             .header(SERVER, "grit:lab-localhost/1.0")
             .header(LOCATION, path)
             .status(status)
-            .body("".to_string())
+            .body(vec![])
             .unwrap()
     }
 
@@ -121,14 +129,14 @@ pub mod errors {
     use super::*;
     use http::header::{HOST, SERVER};
 
-    pub fn error(code: StatusCode, config: &ServerConfig) -> Response<String> {
+    pub fn error(code: StatusCode, config: &ServerConfig) -> Response<Bytes> {
         let error_body = check_errors(code, config).unwrap_or(to_bytes("400"));
 
         Response::builder()
             .header(HOST, config.host)
             .header(SERVER, "grit:lab-localhost/1.0")
             .status(code)
-            .body(String::from_utf8(error_body).unwrap())
+            .body(error_body)
             .unwrap()
     }
 
