@@ -1,17 +1,7 @@
 use crate::server::errors::error;
 use crate::server::method::handle_method;
 use crate::server::redirections::redirect;
-use crate::server::{
-    content_type, execute_cgi_script, format, get_request, get_route, is_cgi_request,
-};
-use crate::server_config::route::Route;
-use crate::server_config::ServerConfig;
-use crate::type_aliases::Bytes;
-use http::header::{CONTENT_LENGTH, CONTENT_TYPE, HOST};
-use http::{Method, Request, Response, StatusCode};
-use mio::net::TcpStream;
-use std::io;
-use std::io::{Read, Write};
+use crate::server::*;
 
 pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Result<()> {
     let mut buffer = [0; 1024];

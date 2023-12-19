@@ -1,3 +1,9 @@
+pub mod type_aliases {
+    pub type Port = u16;
+    pub type Bytes = Vec<u8>;
+    pub type Path<'a> = &'a str;
+    pub type FileExtension<'a> = &'a str;
+}
 pub mod server_config {
     pub mod config;
     pub use config::*;
@@ -14,7 +20,6 @@ pub mod server_config {
         pub body_size_limit: usize,
         pub routes: Vec<Route<'a>>,
     }
-
 
     pub mod route {
         use crate::server::Cgi;
@@ -46,37 +51,37 @@ pub mod server_config {
         }
     }
 }
-pub mod type_aliases {
-    pub type Port = u16;
-    pub type Bytes = Vec<u8>;
-    pub type Path<'a> = &'a str;
-    pub type FileExtension<'a> = &'a str;
-}
 
 pub mod server {
     pub mod handle;
-
     pub use handle::*;
+
+    use crate::server_config::route::Route;
+    use crate::type_aliases::Bytes;
+    use http::header::{CONTENT_LENGTH, CONTENT_TYPE, HOST};
+    use http::{Method, Request, Response, StatusCode};
+    use std::io;
+    use std::io::{Read, Write};
+
+    use crate::server_config::ServerConfig;
     use mio::net::{TcpListener, TcpStream};
     use mio::{Events, Interest, Poll, Token};
     use std::collections::HashMap;
-    use std::io::ErrorKind;
     use std::net::SocketAddr;
+
     use std::sync::Arc;
-
     pub mod requests;
+
     pub use requests::*;
-
     pub mod responses;
+
     pub use responses::*;
-
     pub mod cgi;
-    pub use cgi::*;
 
+    pub use cgi::*;
     pub mod routes;
     pub use routes::*;
     pub mod start;
-    use crate::server_config::ServerConfig;
     pub use start::*;
 
     #[derive(Debug)]
@@ -92,58 +97,62 @@ pub mod server {
     }
 
     #[derive(Debug)]
-    struct Client<'a> {
-        id: usize,
-        config: Arc<ServerConfig<'a>>,
+    pub struct Client<'a> {
+        pub id: usize,
+        pub config: Arc<ServerConfig<'a>>,
     }
 
-    struct ServerState<'a> {
-        poll: Poll,
-        events: Events,
-        token_id: usize,
-        all_listeners: Vec<TcpListener>, // Replace with the actual type of your listeners
-        clients: Vec<Client<'a>>,        // Replace with the actual type of your clients
-        connections: HashMap<Token, (TcpStream, Arc<ServerConfig<'a>>)>,
-        to_close: Vec<Token>,
-    }
-
-    fn initialize_server_state(servers: Vec<Server<'static>>) -> ServerState<'static> {
-        let poll = Poll::new().expect("Failed to create Poll instance");
-        let events = Events::with_capacity(1024);
-        let mut token_id = INITIAL_TOKEN_ID;
-        let mut all_listeners = Vec::new();
-        let mut clients = Vec::new();
-        let connections = HashMap::new();
-        let to_close = Vec::new();
-
-        for server in servers {
-            let config = Arc::new(server.config);
-
-            server.listeners.into_iter().for_each(|listener| {
-                let id = all_listeners.len();
-                all_listeners.push(listener);
-                let token = Token(token_id);
-                token_id += 1;
-
-                poll.registry()
-                    .register(&mut all_listeners[id], token, Interest::READABLE)
-                    .expect("Failed to register listener");
-
-                clients.push(Client {
-                    id,
-                    config: Arc::clone(&config),
-                });
-            });
+    mod state {
+        use super::*;
+        pub struct ServerState<'a> {
+            pub poll: Poll,
+            pub events: Events,
+            pub token_id: usize,
+            pub all_listeners: Vec<TcpListener>,
+            pub clients: Vec<Client<'a>>,
+            pub connections: HashMap<Token, (TcpStream, Arc<ServerConfig<'a>>)>,
+            pub to_close: Vec<Token>,
         }
 
-        ServerState {
-            poll,
-            events,
-            token_id,
-            all_listeners,
-            clients,
-            connections,
-            to_close,
+        pub fn initialize_server_state(servers: Vec<Server<'static>>) -> ServerState<'static> {
+            let poll = Poll::new().expect("Failed to create Poll instance");
+            let events = Events::with_capacity(1024);
+            let mut token_id = INITIAL_TOKEN_ID;
+            let mut all_listeners = Vec::new();
+            let mut clients = Vec::new();
+            let connections = HashMap::new();
+            let to_close = Vec::new();
+
+            // Register all the listeners
+            for server in servers {
+                let config = Arc::new(server.config);
+
+                server.listeners.into_iter().for_each(|listener| {
+                    let id = all_listeners.len();
+                    all_listeners.push(listener);
+                    let token = Token(token_id);
+                    token_id += 1;
+
+                    poll.registry()
+                        .register(&mut all_listeners[id], token, Interest::READABLE)
+                        .expect("Failed to register listener");
+
+                    clients.push(Client {
+                        id,
+                        config: Arc::clone(&config),
+                    });
+                });
+            }
+
+            ServerState {
+                poll,
+                events,
+                token_id,
+                all_listeners,
+                clients,
+                connections,
+                to_close,
+            }
         }
     }
 }

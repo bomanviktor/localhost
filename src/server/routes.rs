@@ -1,9 +1,7 @@
 use crate::server::method::method_is_allowed;
 use crate::server::path::path_exists;
 use crate::server::redirections::is_redirect;
-use crate::server_config::route::Route;
-use crate::server_config::ServerConfig;
-use http::{Request, StatusCode};
+use crate::server::{Request, Route, ServerConfig, StatusCode};
 
 pub fn get_route<'a>(
     req: &'a Request<String>,

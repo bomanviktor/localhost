@@ -1,7 +1,6 @@
 use crate::server::utils::to_bytes;
-use crate::server_config::ServerConfig;
-use crate::type_aliases::Bytes;
-use http::{Response, StatusCode, Version};
+use crate::server::{Bytes, Response, ServerConfig, StatusCode};
+use http::Version;
 use std::fs;
 use std::str::from_utf8_unchecked;
 

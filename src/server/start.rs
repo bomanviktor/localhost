@@ -1,5 +1,10 @@
-use crate::server::*;
+use crate::server::state::*;
+use crate::server::{
+    handle_client, Arc, Client, HashMap, Interest, Poll, Server, SocketAddr, TcpListener,
+    TcpStream, Token,
+};
 use crate::server_config::{server_config, ServerConfig};
+use std::io::ErrorKind;
 
 pub fn servers() -> Vec<Server<'static>> {
     let mut servers = Vec::new();
@@ -33,6 +38,7 @@ pub fn start(servers: Vec<Server<'static>>) {
         close_marked_connections(&mut state);
     }
 }
+
 fn poll_and_handle_events(state: &mut ServerState<'static>) {
     state
         .poll
@@ -64,7 +70,7 @@ fn poll_and_handle_events(state: &mut ServerState<'static>) {
 
 fn accept_connection<'a>(
     poll: &mut Poll,
-    listener: &mut TcpListener, // Replace with the actual type of your listeners
+    listener: &mut TcpListener,
     token_id: &mut usize,
     client: &Client<'a>,
     connections: &mut HashMap<Token, (TcpStream, Arc<ServerConfig<'a>>)>,

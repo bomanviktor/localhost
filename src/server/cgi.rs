@@ -1,9 +1,4 @@
-use crate::server::body::get_body;
-use crate::server::path::get_path;
-use crate::server_config::route::Route;
-use crate::server_config::ServerConfig;
-use crate::type_aliases::Bytes;
-use http::StatusCode;
+use crate::server::{Bytes, Route, ServerConfig, StatusCode};
 use std::process::Command;
 
 #[derive(Clone, Debug)]
@@ -49,10 +44,10 @@ pub fn execute_cgi_script(
     config: &ServerConfig,
     route: &Route,
 ) -> Result<Bytes, StatusCode> {
-    let cgi_path = get_path(request_str);
+    let cgi_path = crate::server::path::get_path(request_str);
     let file_extension = cgi_path.split('.').rev().collect::<Vec<&str>>()[0].trim_end();
     let path = format!("{}{}", route.root_path.unwrap_or("src"), cgi_path);
-    let body = match get_body(request_str, config.body_size_limit) {
+    let body = match crate::server::body::get_body(request_str, config.body_size_limit) {
         Some(b) => b.to_string(),
         None => return Err(StatusCode::PAYLOAD_TOO_LARGE),
     };

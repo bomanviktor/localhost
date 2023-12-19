@@ -1,33 +1,26 @@
-use crate::server::body::get_body;
-use crate::server::headers::{format_header, get_headers};
-use crate::server::method::get_method;
-use crate::server::path::get_path;
-use crate::server::version::get_version;
-use crate::server_config::route::Route;
-use crate::server_config::ServerConfig;
-use http::{Method, Request, StatusCode};
+use crate::server::{Method, Request, Route, ServerConfig, StatusCode};
 use std::str::FromStr;
 
 pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>, StatusCode> {
-    let version = match get_version(req_str) {
+    let version = match version::get_version(req_str) {
         Ok(v) => v,
         Err(_) => return Err(StatusCode::HTTP_VERSION_NOT_SUPPORTED),
     };
 
-    let path = get_path(req_str);
-    let method = match get_method(req_str) {
+    let path = path::get_path(req_str);
+    let method = match method::get_method(req_str) {
         Ok(method) => method,
         Err(_) => return Err(StatusCode::METHOD_NOT_ALLOWED),
     };
     let mut request = Request::builder().method(method).uri(path).version(version);
 
-    for header in get_headers(req_str) {
-        if let Some((key, value)) = format_header(header) {
+    for header in headers::get_headers(req_str) {
+        if let Some((key, value)) = headers::format_header(header) {
             request = request.header(key, value);
         }
     }
 
-    let body = get_body(req_str, conf.body_size_limit).unwrap_or("".to_string());
+    let body = body::get_body(req_str, conf.body_size_limit).unwrap_or("".to_string());
     Ok(request.body(body).unwrap())
 }
 
