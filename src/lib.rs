@@ -228,6 +228,7 @@ pub mod server {
         // Event loop
         loop {
             poll.poll(&mut events, None).expect("Poll failed");
+            let mut to_close = Vec::new();
 
             for event in events.iter() {
                 let token = event.token();
@@ -264,7 +265,21 @@ pub mod server {
                     }
                 } else if let Some((stream, config)) = connections.get_mut(&token) {
                     // Handle existing connection
-                    handle_client(stream, config);
+                    if let Err(e) = handle_client(stream, config) {
+                        if e.kind() != ErrorKind::WouldBlock {
+                            // Mark connection for closure
+                            println!("Marking connection for closure due to error: {}", e);
+                            to_close.push(token);
+                        }
+                    }
+                }
+            }
+            //  Close marked connections
+            for token in to_close {
+                if let Some((mut stream, _)) = connections.remove(&token) {
+                    poll.registry()
+                        .deregister(&mut stream)
+                        .expect("Failed to deregister stream");
                 }
             }
         }
