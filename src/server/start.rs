@@ -52,32 +52,15 @@ pub fn start(servers: Vec<Server<'static>>) {
 
     loop {
         poll.poll(&mut events, None).expect("Poll failed");
-
-        for event in events.iter() {
-            let token = event.token();
-
-            // Find and accept the connection
-            if let Some(listener_config) = listener_configs
-                .iter()
-                .find(|client| token == Token(client.id + INITIAL_TOKEN_ID))
-            {
-                let listener = &mut all_listeners[listener_config.id];
-
-                loop {
-                    if !accept_connection(
-                        &mut poll,
-                        listener,
-                        &mut token_id,
-                        listener_config,
-                        &mut connections,
-                    ) {
-                        break;
-                    }
-                }
-            }
-            handle_existing_connection(&mut to_close, token, &mut connections);
-        }
-
+        handle_events(
+            &mut poll,
+            &events,
+            &listener_configs,
+            &mut all_listeners,
+            &mut token_id,
+            &mut connections,
+            &mut to_close,
+        );
         close_marked_connections(&mut poll, &mut connections, &to_close);
     }
 }
@@ -106,6 +89,30 @@ fn register_listeners(
             config: Arc::clone(&config),
         });
     });
+}
+
+fn handle_events<'a>(
+    poll: &mut Poll,
+    events: &Events,
+    listener_configs: &[Client<'a>],
+    all_listeners: &mut [TcpListener], // Replace with the actual type of your listeners
+    token_id: &mut usize,
+    connections: &mut HashMap<Token, (TcpStream, Arc<ServerConfig<'a>>)>,
+    to_close: &mut Vec<Token>,
+) {
+    for event in events.iter() {
+        let token = event.token();
+        // Find and accept the connection
+        if let Some(listener_config) = listener_configs
+            .iter()
+            .find(|client| token == Token(client.id + INITIAL_TOKEN_ID))
+        {
+            let listener = &mut all_listeners[listener_config.id];
+
+            while accept_connection(poll, listener, token_id, listener_config, connections) {}
+        }
+        handle_existing_connection(to_close, token, connections);
+    }
 }
 
 fn accept_connection<'a>(
@@ -138,11 +145,10 @@ fn handle_existing_connection(
 ) {
     if let Some((stream, config)) = connections.get_mut(&token) {
         if let Err(e) = handle_client(stream, config) {
-            if e.kind() != ErrorKind::WouldBlock {
-                // Mark connection for closure
-                println!("Marking connection for closure due to error: {}", e);
-            } else {
-                return;
+            match e.kind() {
+                ErrorKind::BrokenPipe => eprintln!("Client disconnected: {e}"),
+                ErrorKind::WouldBlock => eprintln!("Client is blocking: {e}"),
+                _ => eprintln!("Error handling client: {e}"),
             }
         }
     }
