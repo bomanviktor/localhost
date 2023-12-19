@@ -9,10 +9,10 @@ use crate::server_config::route::Route;
 use crate::server_config::ServerConfig;
 use http::header::{CONTENT_LENGTH, CONTENT_TYPE, HOST};
 use http::{Method, Request, Response, StatusCode};
+use mio::net::TcpStream;
 use std::fmt::Display;
 use std::io;
 use std::io::{Read, Write};
-use std::net::TcpStream;
 
 pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Result<()> {
     let mut buffer = [0; 1024];
