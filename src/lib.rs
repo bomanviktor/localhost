@@ -155,8 +155,8 @@ pub mod server {
     }
 
     #[derive(Debug)]
-    struct ListenerConfig<'a> {
-        listener_index: usize,
+    struct Client<'a> {
+        id: usize,
         config: Arc<ServerConfig<'a>>,
     }
 }
