@@ -23,6 +23,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 http::Method::GET,
                 http::Method::POST,
                 http::Method::OPTIONS,
+                http::Method::DELETE,
             ],
             http_redirections: vec!["/test1"],
             redirect_status_code: StatusCode::PERMANENT_REDIRECT,
@@ -37,7 +38,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 ("cpp", Cgi::Cpp),
             ]),
             list_directory: true,
-            length_required: true,
+            length_required: false,
         }],
     }]
 }

@@ -1,5 +1,4 @@
-use crate::server::{Method, Request, Route, ServerConfig, StatusCode};
-use std::str::FromStr;
+use crate::server::{Request, Route, ServerConfig, StatusCode};
 
 pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>, StatusCode> {
     let version = match version::get_version(req_str) {
@@ -8,10 +7,11 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
     };
 
     let path = path::get_path(req_str);
-    let method = match method::get_method(req_str) {
+    let method = match super::get_method(req_str) {
         Ok(method) => method,
         Err(_) => return Err(StatusCode::METHOD_NOT_ALLOWED),
     };
+
     let mut request = Request::builder().method(method).uri(path).version(version);
 
     for header in headers::get_headers(req_str) {
@@ -22,157 +22,6 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
 
     let body = body::get_body(req_str, conf.body_size_limit).unwrap_or(" ".to_string());
     Ok(request.body(body).unwrap())
-}
-
-pub mod method {
-    use super::{FromStr, Method, Route};
-    use crate::server::content_type;
-    use crate::server::utils::{get_line, get_split_index};
-    use crate::server_config::ServerConfig;
-    use crate::type_aliases::Bytes;
-    use http::header::{ALLOW, CONTENT_TYPE, HOST};
-    use http::method::InvalidMethod;
-    use http::{Request, Response, StatusCode};
-    use std::fs;
-
-    pub fn get_method(req: &str) -> Result<Method, InvalidMethod> {
-        let line = get_line(req, 0);
-        let method = get_split_index(line, 0);
-        // "GET /path2 HTTP/1.1" -> "GET"
-        Method::from_str(method)
-    }
-
-    pub fn method_is_allowed(method: &Method, route: &Route) -> bool {
-        route.accepted_http_methods.contains(method)
-    }
-
-    pub fn handle_method(
-        route: &Route,
-        req: &Request<String>,
-        config: &ServerConfig,
-    ) -> Result<Response<Bytes>, StatusCode> {
-        let resp = match *req.method() {
-            Method::GET => get(req, config).unwrap_or_default(),
-            Method::OPTIONS => options(route, req, config).unwrap_or_default(),
-            // Method::HEAD => head(req, resp),
-            // Method::POST => {
-            //     post(req, resp).unwrap_or_default();
-            //     None
-            // }
-            // Method::PUT => {
-            //     put(path, body.unwrap()).unwrap_or_default();
-            //     None
-            // }
-            // Method::PATCH => {
-            //     patch(path, body.unwrap()).unwrap_or_default();
-            //     None
-            // }
-            // Method::DELETE => {
-            //     delete(path).unwrap_or_default();
-            //     None
-            // }
-            _ => get(req, config).unwrap_or_default(),
-        };
-        Ok(resp)
-    }
-
-    pub fn get(
-        req: &Request<String>,
-        config: &ServerConfig,
-    ) -> Result<Response<Bytes>, StatusCode> {
-        let path = &req.uri().to_string();
-        let body = match fs::read(format!("src{path}")) {
-            Ok(bytes) => bytes,
-            Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
-        };
-
-        let resp = Response::builder()
-            .version(req.version())
-            .header(HOST, config.host)
-            .status(StatusCode::OK)
-            .header(CONTENT_TYPE, content_type(path))
-            .body(body)
-            .unwrap();
-
-        Ok(resp)
-    }
-
-    pub fn options(
-        route: &Route,
-        req: &Request<String>,
-        config: &ServerConfig,
-    ) -> Result<Response<Bytes>, StatusCode> {
-        let allowed_methods = route
-            .accepted_http_methods
-            .iter()
-            .map(|method| method.as_str())
-            .collect::<Vec<&str>>()
-            .join(", ");
-
-        let resp = Response::builder()
-            .version(req.version())
-            .header(HOST, config.host)
-            .status(StatusCode::OK)
-            .header(ALLOW, allowed_methods)
-            .body(vec![12]) // Empty body for OPTIONS
-            .unwrap();
-
-        Ok(resp)
-    }
-    // pub fn post(req: Request<String>, response: Builder) -> Result<Response<String>, StatusCode> {
-    //     let path = &req.uri().to_string();
-    //     let body = &req.body().as_bytes().to_vec();
-
-    //     let resp = response
-    //         .status(StatusCode::CREATED)
-    //         .header(CONTENT_TYPE, content_type(path))
-    //         .body(body)
-    //         .unwrap();
-
-    //     // Resource does not exist, so create it.
-    //     if fs::metadata(path).is_err() {
-    //         match fs::write(&path, body) {
-    //             Ok(_) => Ok(resp),
-    //             Err(e) => Err(StatusCode::BAD_REQUEST),
-    //         }
-    //     }
-
-    //     let mut path = String::from(path); // Turn the path into String
-    //     let end = path.rfind('.').unwrap_or(path.len());
-    //     let mut i = 1;
-
-    //     // If the file already exists, modify the path.
-    //     // /foo.txt -> /foo(1).txt
-    //     if fs::metadata(&path).is_ok() {
-    //         path.truncate(end);
-    //         path.push_str(&format!("({})", i));
-    //         path.push_str(&path.clone()[end..]);
-    //         i += 1;
-    //     }
-
-    //     match fs::write(&path, body) {
-    //         Ok(_) => Ok(resp),
-    //         Err(e) => Err(StatusCode::BAD_REQUEST),
-    //     }
-    // }
-
-    // pub fn put(path: &str, bytes: Bytes) -> Result<Response<String>, StatusCode> {
-    //     fs::write(path, bytes)
-    // }
-
-    // pub fn patch(path: &str, bytes: Bytes) -> Result<Response<String>, StatusCode> {
-    //     match fs::metadata(path) {
-    //         Ok(_) => fs::write(path, bytes),
-    //         Err(e) => Err(e),
-    //     }
-    // }
-
-    // pub fn delete(path: &str) -> Result<Response<String>, StatusCode> {
-    //     match fs::remove_file(path) {
-    //         Ok(_) => Ok(()),                    // Target was a file
-    //         Err(_) => fs::remove_dir_all(path), // Target was a directory
-    //     }
-    // }
 }
 
 pub mod path {

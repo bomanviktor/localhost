@@ -74,10 +74,10 @@ pub mod server {
 
     pub use requests::*;
     pub mod responses;
-
     pub use responses::*;
+    pub mod methods;
+    pub use methods::*;
     pub mod cgi;
-
     pub use cgi::*;
     pub mod routes;
     pub use routes::*;

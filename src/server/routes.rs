@@ -1,4 +1,4 @@
-use crate::server::method::method_is_allowed;
+use crate::server::method_is_allowed;
 use crate::server::path::path_exists;
 use crate::server::redirections::is_redirect;
 use crate::server::{Request, Route, ServerConfig, StatusCode};

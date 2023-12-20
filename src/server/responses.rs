@@ -22,10 +22,13 @@ pub unsafe fn format(response: Response<Bytes>) -> Bytes {
     }
 
     let body = response.body();
+    
     if !body.is_empty() {
         unsafe {
             resp.push_str(&format!("\r\n{}", from_utf8_unchecked(body)));
         }
+    } else {
+        resp.push_str("\r\n");
     }
 
     to_bytes(&resp)

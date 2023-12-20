@@ -1,5 +1,5 @@
 use crate::server::errors::error;
-use crate::server::method::handle_method;
+use crate::server::handle_method;
 use crate::server::redirections::redirect;
 use crate::server::*;
 
@@ -71,7 +71,6 @@ fn handle_safe_request(
     config: &ServerConfig,
     route: &Route,
 ) -> Result<Response<Bytes>, StatusCode> {
-    println!("request: {req:#?}");
     let resp = handle_method(route, req, config).unwrap_or_default();
     println!("response: {resp:#?}");
     Ok(resp)
