@@ -28,7 +28,8 @@ pub fn handle_method(
     let resp = match *req.method() {
         Method::GET => get(req, config)?,
         Method::OPTIONS => options(route, req, config)?,
-        // Method::HEAD => head(req, resp),
+        Method::HEAD => head(req, config)?,
+        Method::TRACE => trace(req, config)?,
         Method::POST => post(req)?,
         Method::PUT => put(req)?,
         Method::PATCH => patch(req)?,
@@ -50,6 +51,65 @@ pub fn get(req: &Request<String>, config: &ServerConfig) -> Result<Response<Byte
         .status(StatusCode::OK)
         .header(CONTENT_TYPE, content_type(path))
         .body(body)
+        .unwrap();
+
+    Ok(resp)
+}
+
+pub fn head(req: &Request<String>, config: &ServerConfig) -> Result<Response<Bytes>, StatusCode> {
+    let path = &req.uri().to_string();
+    // We use fs::metadata instead of fs::read to avoid loading the file content
+    let metadata = match fs::metadata(format!("src{path}")) {
+        Ok(metadata) => metadata,
+        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+
+    let resp = Response::builder()
+        .version(req.version())
+        .header(HOST, config.host)
+        .status(StatusCode::OK)
+        .header(CONTENT_TYPE, content_type(path))
+        .header(CONTENT_LENGTH, metadata.len().to_string()) // Set the Content-Length header
+        .body(vec![]) // No body for HEAD
+        .unwrap();
+
+    Ok(resp)
+}
+
+pub fn trace(req: &Request<String>, config: &ServerConfig) -> Result<Response<Bytes>, StatusCode> {
+    // Check the Max-Forwards header
+    let max_forwards = req
+        .headers()
+        .get("Max-Forwards")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|s| s.parse::<i32>().ok());
+    if max_forwards == Some(0) {
+        return Err(StatusCode::TOO_MANY_REQUESTS); // Or an appropriate status code
+    }
+
+    // Update the Via header
+    let existing_via = req.headers().get("Via").map(|v| v.to_str().unwrap_or(""));
+    let via = if let Some(via_header) = existing_via {
+        format!("{}, {}", via_header, config.host)
+    } else {
+        config.host.to_string()
+    };
+
+    // Exclude sensitive headers and construct the request string
+    let request_string = format!("{:?}\r\n", req)
+        .lines()
+        .filter(|line| !line.starts_with("Cookie:") && !line.starts_with("Authorization:"))
+        .collect::<Vec<_>>()
+        .join("\r\n");
+
+    // Create the response
+    let resp = Response::builder()
+        .version(req.version())
+        .header(HOST, config.host)
+        .status(StatusCode::OK)
+        .header(CONTENT_TYPE, "message/http")
+        .header("Via", via)
+        .body(Bytes::from(request_string))
         .unwrap();
 
     Ok(resp)
