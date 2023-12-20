@@ -40,16 +40,9 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
         return Ok(());
     }
 
-    if request.method().is_safe() {
-        match handle_safe_request(&request, config, &route) {
-            Ok(response) => serve_response(stream, response)?,
-            Err(code) => serve_response(stream, error(code, config))?,
-        }
-    } else {
-        match handle_unsafe_request(&request, config, &route) {
-            Ok(response) => serve_response(stream, response)?,
-            Err(code) => serve_response(stream, error(code, config))?,
-        };
+    match handle_method(&route, &request, config) {
+        Ok(response) => serve_response(stream, response)?,
+        Err(code) => serve_response(stream, error(code, config))?,
     }
     Ok(())
 }
@@ -63,52 +56,4 @@ pub fn serve_response(stream: &mut TcpStream, response: Response<Bytes>) -> io::
         Ok(_) => Ok(()),
         Err(e) => Err(e),
     }
-}
-
-fn handle_safe_request(
-    req: &Request<String>,
-    config: &ServerConfig,
-    route: &Route,
-) -> Result<Response<Bytes>, StatusCode> {
-    let resp = handle_method(route, req, config).unwrap_or_default();
-    Ok(resp)
-}
-
-fn handle_unsafe_request(
-    req: &Request<String>,
-    config: &ServerConfig,
-    route: &Route,
-) -> Result<Response<Bytes>, StatusCode> {
-    // TODO: Move error handling to the method functions
-    let mut _resp = Response::builder()
-        .status(StatusCode::OK)
-        .version(req.version())
-        .header(HOST, config.host);
-
-    // Set the Content-Type header or respond with 400 - Bad Request
-    if let Some(_content_type) = req.headers().get(CONTENT_TYPE) {
-        // resp = resp.header(CONTENT_TYPE, content_type);
-    } else {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-
-    // Set the Content-Length header or respond with 411 - Length Required
-    let mut content_length = false;
-    if let Some(_length) = req.headers().get(CONTENT_LENGTH) {
-        // resp = resp.header(CONTENT_LENGTH, length);
-        content_length = true;
-    }
-
-    // Requires a length, has no length, and is a
-    if route.length_required && !content_length {
-        return Err(StatusCode::LENGTH_REQUIRED);
-    }
-
-    // Get the body of the response
-    if req.body().len() > config.body_size_limit {
-        return Err(StatusCode::PAYLOAD_TOO_LARGE);
-    }
-
-    let resp = handle_method(route, req, config).unwrap_or_default();
-    Ok(resp)
 }
