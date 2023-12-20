@@ -1,4 +1,4 @@
-use crate::server::method::method_is_allowed;
+use crate::server::method_is_allowed;
 use crate::server::path::path_exists;
 use crate::server::redirections::is_redirect;
 use crate::server::{Request, Route, ServerConfig, StatusCode};
@@ -25,7 +25,7 @@ pub fn get_route<'a>(
 
     // Check if the method is allowed on route
     if !method_is_allowed(req.method(), &route) {
-        return Err((StatusCode::NOT_FOUND, "".to_string()));
+        return Err((StatusCode::METHOD_NOT_ALLOWED, "".to_string()));
     }
 
     Ok(route)

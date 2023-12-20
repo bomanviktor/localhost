@@ -1,5 +1,4 @@
-use crate::server::{Method, Request, Route, ServerConfig, StatusCode};
-use std::str::FromStr;
+use crate::server::{Request, Route, ServerConfig, StatusCode};
 
 pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>, StatusCode> {
     let version = match version::get_version(req_str) {
@@ -8,10 +7,11 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
     };
 
     let path = path::get_path(req_str);
-    let method = match method::get_method(req_str) {
+    let method = match super::get_method(req_str) {
         Ok(method) => method,
         Err(_) => return Err(StatusCode::METHOD_NOT_ALLOWED),
     };
+
     let mut request = Request::builder().method(method).uri(path).version(version);
 
     for header in headers::get_headers(req_str) {
@@ -20,102 +20,8 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
         }
     }
 
-    let body = body::get_body(req_str, conf.body_size_limit).unwrap_or("".to_string());
+    let body = body::get_body(req_str, conf.body_size_limit).unwrap_or(" ".to_string());
     Ok(request.body(body).unwrap())
-}
-
-pub mod method {
-    use super::{FromStr, Method, Route};
-    use crate::server::utils::{get_line, get_split_index};
-    use crate::type_aliases::{Bytes, Path};
-    use http::method::InvalidMethod;
-    use std::fs;
-
-    pub fn get_method(req: &str) -> Result<Method, InvalidMethod> {
-        let line = get_line(req, 0);
-        let method = get_split_index(line, 0);
-        // "GET /path2 HTTP/1.1" -> "GET"
-        Method::from_str(method)
-    }
-
-    pub fn method_is_allowed(method: &Method, route: &Route) -> bool {
-        route.accepted_http_methods.contains(method)
-    }
-
-    pub fn handle_method(
-        route: &Route,
-        path: Path,
-        method: &Method,
-        body: Option<Bytes>,
-    ) -> Option<Bytes> {
-        let path = &route.format_path(path);
-
-        match *method {
-            Method::GET => Some(get(path).unwrap_or_default()),
-            Method::HEAD => None,
-            Method::POST => {
-                post(path, body.unwrap()).unwrap_or_default();
-                None
-            }
-            Method::PUT => {
-                put(path, body.unwrap()).unwrap_or_default();
-                None
-            }
-            Method::PATCH => {
-                patch(path, body.unwrap()).unwrap_or_default();
-                None
-            }
-            Method::DELETE => {
-                delete(path).unwrap_or_default();
-                None
-            }
-            _ => Some(get(path).unwrap()),
-        }
-    }
-
-    pub fn get(path: Path) -> std::io::Result<Bytes> {
-        fs::read(path)
-    }
-
-    pub fn post(path: Path, bytes: Bytes) -> std::io::Result<()> {
-        // Resource does not exist, so create it.
-        if fs::metadata(path).is_err() {
-            return fs::write(path, bytes);
-        }
-
-        let mut path = String::from(path); // Turn the path into String
-        let end = path.rfind('.').unwrap_or(path.len());
-        let mut i = 1;
-
-        // If the file already exists, modify the path.
-        // /foo.txt -> /foo(1).txt
-        while fs::metadata(&path).is_ok() {
-            path.truncate(end);
-            path.push_str(&format!("({})", i));
-            path.push_str(&path.clone()[end..]);
-            i += 1;
-        }
-
-        fs::write(&path, bytes)
-    }
-
-    pub fn put(path: Path, bytes: Bytes) -> std::io::Result<()> {
-        fs::write(path, bytes)
-    }
-
-    pub fn patch(path: Path, bytes: Bytes) -> std::io::Result<()> {
-        match fs::metadata(path) {
-            Ok(_) => fs::write(path, bytes),
-            Err(e) => Err(e),
-        }
-    }
-
-    pub fn delete(path: Path) -> std::io::Result<()> {
-        match fs::remove_file(path) {
-            Ok(_) => Ok(()),                    // Target was a file
-            Err(_) => fs::remove_dir_all(path), // Target was a directory
-        }
-    }
 }
 
 pub mod path {
@@ -133,15 +39,11 @@ pub mod path {
         routes: &[Route<'a>],
     ) -> Option<(usize, &'a str)> {
         for (i, route) in routes.iter().enumerate() {
-            for &path in &route.paths {
-                if path == requested_path {
-                    return Some((i, path)); // Path is contained in the route
-                }
-                if route.http_redirections.contains_key(requested_path) {
-                    // Path is a part of the redirections
-                    let redirected_path = route.http_redirections.get(requested_path).unwrap();
-                    return path_exists(redirected_path, routes); // Recursively call itself to check for the redirected path
-                }
+            if route.path == requested_path {
+                return Some((i, route.path));
+            }
+            if route.http_redirections.contains(&requested_path) {
+                return Some((i, route.path));
             }
         }
         None // Path does not exist in allowed paths or in redirections

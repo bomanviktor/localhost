@@ -1,5 +1,5 @@
 use crate::server::errors::error;
-use crate::server::method::handle_method;
+use crate::server::handle_method;
 use crate::server::redirections::redirect;
 use crate::server::*;
 
@@ -8,7 +8,7 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
 
     let bytes_read = stream.read(&mut buffer)?;
 
-    let request_string = match String::from_utf8(buffer[..=bytes_read].to_vec()) {
+    let request_string = match String::from_utf8(buffer[..bytes_read].to_vec()) {
         Ok(request_str) => request_str,
         Err(e) => {
             eprintln!("Error reading from buffer to string: {e}");
@@ -21,6 +21,7 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
         Err(e) => return serve_response(stream, error(e, config)),
     };
 
+    println!("request: {request:?}");
     let route = match get_route(&request, config) {
         Ok(route) => route,
         Err((code, path)) if code.is_redirection() => {
@@ -70,21 +71,8 @@ fn handle_safe_request(
     config: &ServerConfig,
     route: &Route,
 ) -> Result<Response<Bytes>, StatusCode> {
-    let path = &req.uri().to_string();
-    let body = handle_method(route, path, req.method(), None).unwrap_or_default();
-    if body.is_empty() && req.method() == Method::GET {
-        return Err(StatusCode::NOT_FOUND);
-    }
-
-    let resp = Response::builder()
-        .status(StatusCode::OK)
-        .version(req.version())
-        .header(HOST, config.host)
-        .header(CONTENT_TYPE, content_type(path))
-        .header(CONTENT_LENGTH, body.len())
-        .body(body)
-        .unwrap();
-
+    let resp = handle_method(route, req, config).unwrap_or_default();
+    println!("response: {resp:#?}");
     Ok(resp)
 }
 
@@ -93,22 +81,23 @@ fn handle_unsafe_request(
     config: &ServerConfig,
     route: &Route,
 ) -> Result<Response<Bytes>, StatusCode> {
-    let mut resp = Response::builder()
+    // TODO: Move error handling to the method functions
+    let mut _resp = Response::builder()
         .status(StatusCode::OK)
         .version(req.version())
         .header(HOST, config.host);
 
     // Set the Content-Type header or respond with 400 - Bad Request
-    if let Some(content_type) = req.headers().get(CONTENT_TYPE) {
-        resp = resp.header(CONTENT_TYPE, content_type);
+    if let Some(_content_type) = req.headers().get(CONTENT_TYPE) {
+        // resp = resp.header(CONTENT_TYPE, content_type);
     } else {
         return Err(StatusCode::BAD_REQUEST);
     }
 
     // Set the Content-Length header or respond with 411 - Length Required
     let mut content_length = false;
-    if let Some(length) = req.headers().get(CONTENT_LENGTH) {
-        resp = resp.header(CONTENT_LENGTH, length);
+    if let Some(_length) = req.headers().get(CONTENT_LENGTH) {
+        // resp = resp.header(CONTENT_LENGTH, length);
         content_length = true;
     }
 
@@ -122,8 +111,6 @@ fn handle_unsafe_request(
         return Err(StatusCode::PAYLOAD_TOO_LARGE);
     }
 
-    let path = &req.uri().to_string();
-    let body = req.body().clone().as_bytes().to_vec();
-    handle_method(route, path, req.method(), Some(body.clone()));
-    Ok(resp.body(body).unwrap())
+    let resp = handle_method(route, req, config).unwrap_or_default();
+    Ok(resp)
 }

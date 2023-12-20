@@ -41,6 +41,7 @@ pub fn start(servers: Vec<Server<'static>>) {
         close_marked_connections(&mut state);
     }
 }
+
 fn poll_and_handle_events(state: &mut ServerState<'static>) {
     state
         .poll
@@ -72,7 +73,7 @@ fn poll_and_handle_events(state: &mut ServerState<'static>) {
 
 fn accept_connection<'a>(
     poll: &mut Poll,
-    listener: &mut TcpListener, // Replace with the actual type of your listeners
+    listener: &mut TcpListener,
     token_id: &mut usize,
     client: &Client<'a>,
     connections: &mut HashMap<Token, (TcpStream, Arc<ServerConfig<'a>>)>,
