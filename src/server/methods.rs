@@ -34,7 +34,7 @@ pub fn handle_method(
         Method::PUT => put(req)?,
         Method::PATCH => patch(req)?,
         Method::DELETE => delete(req)?,
-        _ => get(req, config).unwrap_or_default(),
+        _ => return Err(StatusCode::BAD_REQUEST),
     };
     Ok(resp)
 }
