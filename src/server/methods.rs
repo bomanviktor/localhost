@@ -42,7 +42,7 @@ pub fn get(req: &Request<String>, config: &ServerConfig) -> Result<Response<Byte
     let path = &req.uri().to_string();
     let body = match fs::read(format!("src{path}")) {
         Ok(bytes) => bytes,
-        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Err(_) => return Err(StatusCode::NOT_FOUND),
     };
 
     let resp = Response::builder()

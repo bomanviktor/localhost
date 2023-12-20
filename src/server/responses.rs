@@ -74,7 +74,7 @@ pub fn content_type(path: &str) -> String {
         "ttf" => "application/font-sfnt",
         "otf" => "application/font-sfnt",
         // Default to HTML for unknown types
-        _ => "text/html",
+        _ => "text/plain",
     }
     .to_string()
 }
@@ -129,7 +129,10 @@ pub mod errors {
     use http::header::{HOST, SERVER};
 
     pub fn error(code: StatusCode, config: &ServerConfig) -> Response<Bytes> {
-        let error_body = check_errors(code, config).unwrap_or(to_bytes("400"));
+        let error_body = match check_errors(code, config) {
+            Ok(b) => b,
+            Err(_) => to_bytes(&format!("{code}")),
+        };
 
         Response::builder()
             .header(HOST, config.host)
@@ -140,7 +143,7 @@ pub mod errors {
     }
 
     fn check_errors(code: StatusCode, config: &ServerConfig) -> std::io::Result<Bytes> {
-        let error_path = config.default_error_path.unwrap_or("src/default_errors");
+        let error_path = config.default_error_path.unwrap_or("src");
         fs::read(format!("{error_path}/{}.html", code.as_u16()))
     }
 }
