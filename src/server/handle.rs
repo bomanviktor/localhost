@@ -21,7 +21,6 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
         Err(e) => return serve_response(stream, error(e, config)),
     };
 
-    println!("request: {request:?}");
     let route = match get_route(&request, config) {
         Ok(route) => route,
         Err((code, path)) if code.is_redirection() => {
@@ -72,7 +71,6 @@ fn handle_safe_request(
     route: &Route,
 ) -> Result<Response<Bytes>, StatusCode> {
     let resp = handle_method(route, req, config).unwrap_or_default();
-    println!("response: {resp:#?}");
     Ok(resp)
 }
 
