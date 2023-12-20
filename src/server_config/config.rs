@@ -7,18 +7,10 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
     vec![ServerConfig {
         host: "127.0.0.1",
         ports: vec![8080, 8081, 8082],
-        default_error_paths: HashMap::from([
-            (StatusCode::BAD_REQUEST, "/400.html"),
-            (StatusCode::FORBIDDEN, "/403.html"),
-            (StatusCode::NOT_FOUND, "/404.html"),
-            (StatusCode::METHOD_NOT_ALLOWED, "/405.html"),
-            (StatusCode::LENGTH_REQUIRED, "/411.html"),
-            (StatusCode::PAYLOAD_TOO_LARGE, "/413.html"),
-            (StatusCode::INTERNAL_SERVER_ERROR, "/500.html"),
-        ]),
+        default_error_path: Some("src/default_errors"),
         body_size_limit: 1024,
         routes: vec![Route {
-            path: "/path1",
+            path: "/test.png",
             accepted_http_methods: vec![
                 http::Method::GET,
                 http::Method::POST,
@@ -38,7 +30,6 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 ("cpp", Cgi::Cpp),
             ]),
             list_directory: true,
-            length_required: false,
         }],
     }]
 }

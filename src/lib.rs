@@ -10,13 +10,12 @@ pub mod server_config {
 
     use crate::server_config::route::Route;
     use crate::type_aliases::{Path, Port};
-    use std::collections::HashMap;
 
     #[derive(Clone, Debug)]
     pub struct ServerConfig<'a> {
         pub host: &'a str,
         pub ports: Vec<Port>,
-        pub default_error_paths: HashMap<http::StatusCode, Path<'a>>,
+        pub default_error_path: Option<Path<'a>>,
         pub body_size_limit: usize,
         pub routes: Vec<Route<'a>>,
     }
@@ -37,7 +36,6 @@ pub mod server_config {
             pub default_if_request_is_dir: Path<'a>, // TODO: Implement
             pub cgi_def: HashMap<FileExtension<'a>, Cgi>,
             pub list_directory: bool, // TODO: Implement
-            pub length_required: bool,
         }
 
         impl Route<'_> {
@@ -58,7 +56,6 @@ pub mod server {
 
     use crate::server_config::route::Route;
     use crate::type_aliases::Bytes;
-    use http::header::{CONTENT_LENGTH, CONTENT_TYPE, HOST};
     use http::{Method, Request, Response, StatusCode};
     use std::io;
     use std::io::{Read, Write};

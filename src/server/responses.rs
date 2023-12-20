@@ -140,10 +140,7 @@ pub mod errors {
     }
 
     fn check_errors(code: StatusCode, config: &ServerConfig) -> std::io::Result<Bytes> {
-        let error_path = config
-            .default_error_paths
-            .get(&code)
-            .unwrap_or(&"/400.html");
-        fs::read(format!("src/default_errors{error_path}"))
+        let error_path = config.default_error_path.unwrap_or("src/default_errors");
+        fs::read(format!("{error_path}/{}.html", code.as_u16()))
     }
 }
