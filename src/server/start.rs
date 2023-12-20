@@ -4,7 +4,10 @@ use crate::server::{
     TcpStream, Token,
 };
 use crate::server_config::{server_config, ServerConfig};
+use socket2::{SockRef, Socket};
 use std::io::ErrorKind;
+use std::os::fd::{AsRawFd, FromRawFd};
+use std::time::Duration;
 
 pub fn servers() -> Vec<Server<'static>> {
     let mut servers = Vec::new();
@@ -38,7 +41,6 @@ pub fn start(servers: Vec<Server<'static>>) {
         close_marked_connections(&mut state);
     }
 }
-
 fn poll_and_handle_events(state: &mut ServerState<'static>) {
     state
         .poll
@@ -70,13 +72,15 @@ fn poll_and_handle_events(state: &mut ServerState<'static>) {
 
 fn accept_connection<'a>(
     poll: &mut Poll,
-    listener: &mut TcpListener,
+    listener: &mut TcpListener, // Replace with the actual type of your listeners
     token_id: &mut usize,
     client: &Client<'a>,
     connections: &mut HashMap<Token, (TcpStream, Arc<ServerConfig<'a>>)>,
 ) -> bool {
     match listener.accept() {
         Ok((mut stream, _)) => {
+            set_linger_option(&stream, Some(Duration::from_millis(100)))
+                .expect("Failed to set linger option");
             let connection_token = Token(*token_id);
             *token_id += 1;
 
@@ -118,4 +122,12 @@ fn close_marked_connections(state: &mut ServerState<'static>) {
                 .expect("Failed to deregister stream");
         }
     }
+}
+
+// Function to set linger option on a mio TcpStream
+fn set_linger_option(stream: &TcpStream, linger_duration: Option<Duration>) -> std::io::Result<()> {
+    let socket = unsafe { Socket::from_raw_fd(stream.as_raw_fd()) };
+    SockRef::from(&socket).set_linger(linger_duration)?;
+    std::mem::forget(socket); // Important to avoid closing the file descriptor
+    Ok(())
 }
