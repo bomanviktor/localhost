@@ -7,25 +7,22 @@ use std::str::from_utf8_unchecked;
 /// # Safety
 ///
 /// This function will call the unsafe method `from_utf8_unchecked`
-pub unsafe fn format(response: Response<Bytes>) -> Bytes {
-    let version = response.version();
-    let binding = response.status();
-    let status = binding.as_str();
-    let mut resp = format!("{version:?} {status}\r\n");
+pub unsafe fn format_response(response: Response<Bytes>) -> Bytes {
+    // Split up the response into head and parts
+    let (head, body) = response.into_parts();
+    let mut resp = format!("{:?} {}\r\n", head.version, head.status);
 
     // Get all headers into the response
-    for (key, value) in response.headers() {
+    for (key, value) in head.headers.iter() {
         let key = key.to_string();
-        let value = value.to_str().unwrap();
+        let value = value.to_str().unwrap_or_default();
         let header = format!("{key}: {value}\r\n");
         resp.push_str(&header);
     }
 
-    let body = response.body();
-
     if !body.is_empty() {
         unsafe {
-            resp.push_str(&format!("\r\n{}", from_utf8_unchecked(body)));
+            resp.push_str(&format!("\r\n{}", from_utf8_unchecked(&body)));
         }
     } else {
         resp.push_str("\r\n");

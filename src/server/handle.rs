@@ -49,11 +49,7 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
 
 pub fn serve_response(stream: &mut TcpStream, response: Response<Bytes>) -> io::Result<()> {
     unsafe {
-        stream.write_all(&format(response))?;
+        stream.write_all(&format_response(response))?;
     }
-
-    match stream.flush() {
-        Ok(_) => Ok(()),
-        Err(e) => Err(e),
-    }
+    stream.flush()
 }
