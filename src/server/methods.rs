@@ -21,13 +21,27 @@ pub fn handle_method(
     req: &Request<String>,
     config: &ServerConfig,
 ) -> Result<Response<Bytes>, StatusCode> {
+    // Handle no content type on UNSAFE methods here
+    if !req.method().is_safe() && !req.headers().contains_key(CONTENT_TYPE) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    //==================================//
+    //  Add middleware here. Example:   //
+    //  Verify allowed content types.   //
+    //==================================//
+
     let resp = match *req.method() {
-        // SAFE METHODS
+        //==============//
+        // SAFE METHODS //
+        //==============//
         Method::GET => safe::get(req, config)?,
         Method::OPTIONS => safe::options(route, req, config)?,
         Method::HEAD => safe::head(req, config)?,
         Method::TRACE => safe::trace(req, config)?,
-        // UNSAFE METHODS
+        //================//
+        // UNSAFE METHODS //
+        //================//
         Method::POST => not_safe::post(req)?,
         Method::PUT => not_safe::put(req)?,
         Method::PATCH => not_safe::patch(req)?,
@@ -66,7 +80,6 @@ mod safe {
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let path = &req.uri().to_string();
-        // We use fs::metadata instead of fs::read to avoid loading the file content
         let metadata = match fs::metadata(format!("src{path}")) {
             Ok(metadata) => metadata,
             Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
@@ -94,12 +107,14 @@ mod safe {
             .get("Max-Forwards")
             .and_then(|h| h.to_str().ok())
             .and_then(|s| s.parse::<i32>().ok());
+
         if max_forwards == Some(0) {
-            return Err(StatusCode::TOO_MANY_REQUESTS); // Or an appropriate status code
+            return Err(StatusCode::BAD_REQUEST);
         }
 
         // Update the Via header
         let existing_via = req.headers().get("Via").map(|v| v.to_str().unwrap_or(""));
+
         let via = if let Some(via_header) = existing_via {
             format!("{}, {}", via_header, config.host)
         } else {
@@ -113,7 +128,6 @@ mod safe {
             .collect::<Vec<_>>()
             .join("\r\n");
 
-        // Create the response
         let resp = Response::builder()
             .version(req.version())
             .header(HOST, config.host)
