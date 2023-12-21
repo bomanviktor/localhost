@@ -12,14 +12,14 @@ pub fn get_route<'a>(
     let route;
     let routed_path;
 
-    if let Some((i, path)) = path_exists(&url_path, &config.routes) {
+    if let Some((i, path)) = path_exists(url_path, &config.routes) {
         route = config.routes[i].clone();
         routed_path = path;
     } else {
         return Err((StatusCode::NOT_FOUND, "".to_string()));
     }
 
-    if is_redirect(&url_path, routed_path) {
+    if is_redirect(url_path, routed_path) {
         return Err((route.redirect_status_code, routed_path.to_string()));
     }
 

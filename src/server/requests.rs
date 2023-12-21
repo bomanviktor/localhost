@@ -20,8 +20,11 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
         }
     }
 
-    let body = body::get_body(req_str, conf.body_size_limit).unwrap_or(" ".to_string());
-    Ok(request.body(body).unwrap())
+    let body = body::get_body(req_str, conf.body_size_limit).unwrap_or_default();
+    match request.body(body) {
+        Ok(request) => Ok(request),
+        Err(_) => Err(StatusCode::BAD_REQUEST),
+    }
 }
 
 pub mod path {
