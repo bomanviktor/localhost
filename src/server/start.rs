@@ -17,13 +17,9 @@ pub fn servers() -> Vec<Server<'static>> {
         for port in &config.ports {
             // Create a listener for each port
             let address = format!("{}:{}", config.host, port);
-            match std::net::TcpListener::bind(address.parse::<SocketAddr>().unwrap()) {
+            match TcpListener::bind(address.parse::<SocketAddr>().unwrap()) {
                 Ok(listener) => {
-                    listener
-                        .set_nonblocking(true)
-                        .expect("Could not set non-blocking");
-                    listeners.push(TcpListener::from_std(listener));
-                    //listeners.push(listener);
+                    listeners.push(listener);
                     println!("Server listening on {}", address);
                 }
                 Err(e) => eprintln!("Error: {}. Unable to listen to: {}", e, address),
@@ -84,7 +80,7 @@ fn accept_connection<'a>(
 ) -> bool {
     match listener.accept() {
         Ok((mut stream, _)) => {
-            set_linger_option(&stream, Some(Duration::from_millis(1000)))
+            set_linger_option(&stream, Some(Duration::from_millis(100)))
                 .expect("Failed to set linger option");
 
             let connection_token = Token(*token_id);

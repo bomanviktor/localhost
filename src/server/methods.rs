@@ -69,6 +69,7 @@ mod safe {
             .header(HOST, config.host)
             .status(StatusCode::OK)
             .header(CONTENT_TYPE, content_type(path))
+            .header(CONTENT_LENGTH, body.len())
             .body(body)
             .unwrap();
 
