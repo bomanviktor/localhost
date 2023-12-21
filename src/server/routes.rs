@@ -8,7 +8,7 @@ pub fn get_route<'a>(
     config: &'a ServerConfig,
 ) -> Result<Route<'a>, (StatusCode, String)> {
     // Get the route assigned to the path
-    let url_path = req.uri().to_string();
+    let url_path = req.uri().path();
     let route;
     let routed_path;
 

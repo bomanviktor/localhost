@@ -7,7 +7,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
     vec![ServerConfig {
         host: "127.0.0.1",
         ports: vec![8080, 8081, 8082],
-        default_error_path: Some("src/default_errors"),
+        default_error_path: Some("src/default_errors/"),
         body_size_limit: 1024,
         routes: vec![Route {
             path: "/test.png",

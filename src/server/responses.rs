@@ -123,7 +123,7 @@ pub mod redirections {
 
 pub mod errors {
     use super::*;
-    use http::header::{HOST, SERVER};
+    use http::header::{CONTENT_LENGTH, HOST, SERVER};
 
     pub fn error(code: StatusCode, config: &ServerConfig) -> Response<Bytes> {
         let error_body = match check_errors(code, config) {
@@ -134,6 +134,7 @@ pub mod errors {
         Response::builder()
             .header(HOST, config.host)
             .header(SERVER, "grit:lab-localhost/1.0")
+            .header(CONTENT_LENGTH, error_body.len())
             .status(code)
             .body(error_body)
             .unwrap()

@@ -27,6 +27,8 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
 pub mod path {
     use super::*;
     use crate::server::utils::{get_line, get_split_index};
+    use crate::type_aliases::Path;
+
     /// `path` gets the path from the `request`
     pub fn get_path(req: &str) -> &str {
         let line = get_line(req, 0);
@@ -35,9 +37,9 @@ pub mod path {
 
     /// `path_exists` gets the `path` and the `index` of the `route` it was a part of if found.
     pub fn path_exists<'a>(
-        requested_path: &'a str,
+        requested_path: Path<'a>,
         routes: &[Route<'a>],
-    ) -> Option<(usize, &'a str)> {
+    ) -> Option<(usize, Path<'a>)> {
         for (i, route) in routes.iter().enumerate() {
             if route.path == requested_path {
                 return Some((i, route.path));
