@@ -49,6 +49,7 @@ pub fn handle_method(
 
 mod safe {
     use super::*;
+    use http::header::{MAX_FORWARDS, VIA};
     pub fn get(
         req: &Request<String>,
         config: &ServerConfig,
@@ -100,7 +101,7 @@ mod safe {
         // Check the Max-Forwards header
         let max_forwards = req
             .headers()
-            .get("Max-Forwards")
+            .get(MAX_FORWARDS)
             .and_then(|h| h.to_str().ok())
             .and_then(|s| s.parse::<i32>().ok());
 
@@ -109,7 +110,10 @@ mod safe {
         }
 
         // Update the Via header
-        let existing_via = req.headers().get("Via").map(|v| v.to_str().unwrap_or(""));
+        let existing_via = req
+            .headers()
+            .get(VIA)
+            .map(|v| v.to_str().unwrap_or_default());
 
         let via = if let Some(via_header) = existing_via {
             format!("{}, {}", via_header, config.host)
@@ -117,23 +121,36 @@ mod safe {
             config.host.to_string()
         };
 
-        // Exclude sensitive headers and construct the request string
-        let request_string = format!("{:?}\r\n", req)
-            .lines()
-            .filter(|line| !line.starts_with("Cookie:") && !line.starts_with("Authorization:"))
-            .collect::<Vec<_>>()
-            .join("\r\n");
+        let (head, body) = req.clone().into_parts();
 
-        let resp = Response::builder()
+        // Add the status line
+        let mut request_string =
+            format!("{} {} {:?}\n\n", head.method, head.uri.path(), head.version);
+
+        // Add the non-sensitive headers
+        for (key, value) in head.headers.iter() {
+            if !value.is_sensitive() {
+                request_string.push_str(&format!(
+                    "{key}: {}\n\n",
+                    value.to_str().unwrap_or_default()
+                ));
+            }
+        }
+
+        // Add the body
+        request_string.push_str(&body);
+
+        match Response::builder()
             .version(req.version())
             .header(HOST, config.host)
             .status(StatusCode::OK)
             .header(CONTENT_TYPE, "message/http")
-            .header("Via", via)
+            .header(VIA, via)
             .body(Bytes::from(request_string))
-            .unwrap();
-
-        Ok(resp)
+        {
+            Ok(r) => Ok(r),
+            Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        }
     }
 
     pub fn options(
@@ -162,13 +179,15 @@ mod safe {
 
 mod not_safe {
     use super::*;
+    use http::header::LOCATION;
     pub fn post(req: &Request<String>) -> Result<Response<Bytes>, StatusCode> {
         let path = &format!("src{}", req.uri().path());
         let body = req.body().as_bytes().to_vec();
 
         let resp = Response::builder()
-            .status(StatusCode::OK)
+            .status(StatusCode::CREATED)
             .version(req.version())
+            .header(LOCATION, path)
             .header(CONTENT_TYPE, content_type(path))
             .header(CONTENT_LENGTH, body.len())
             .body(body.clone())
@@ -237,7 +256,7 @@ mod not_safe {
 
     pub fn delete(req: &Request<String>) -> Result<Response<Bytes>, StatusCode> {
         let path = &format!("src{}", req.uri().path());
-        let body = match fs::read(format!("src{path}")) {
+        let body = match fs::read(path) {
             Ok(bytes) => bytes,
             Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
         };
