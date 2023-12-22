@@ -1,2 +1,5 @@
 #![allow(dead_code)]
-pub fn setup() {}
+use localhost::server::{servers, start};
+pub fn setup() {
+    start(servers())
+}

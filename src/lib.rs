@@ -1,128 +1,125 @@
+pub mod type_aliases {
+    pub type Port = u16;
+    pub type Bytes = Vec<u8>;
+    pub type Path<'a> = &'a str;
+    pub type FileExtension<'a> = &'a str;
+}
 pub mod server_config {
     pub mod config;
-    use crate::server::Port;
+    pub use config::*;
+
     use crate::server_config::route::Route;
-    use std::path::Path;
+    use crate::type_aliases::{Path, Port};
 
     #[derive(Clone, Debug)]
     pub struct ServerConfig<'a> {
         pub host: &'a str,
         pub ports: Vec<Port>,
-        pub default_error_paths: Vec<&'a Path>,
-        pub body_size_limit: u128,
+        pub default_error_path: Option<Path<'a>>,
+        pub body_size_limit: usize,
         pub routes: Vec<Route<'a>>,
     }
 
-    pub mod builder {
-        use super::*;
-        #[derive(Debug)]
-        pub struct ConfigBuilder<'a> {
-            pub host: Option<&'a str>,
-            pub ports: Option<Vec<Port>>,
-            pub default_error_paths: Option<Vec<&'a Path>>,
-            pub body_size_limit: Option<u128>,
-            pub routes: Option<Vec<Route<'a>>>,
-        }
-
-        impl Default for ConfigBuilder<'_> {
-            fn default() -> Self {
-                Self::new()
-            }
-        }
-        impl<'a> ConfigBuilder<'a> {
-            pub fn new() -> ConfigBuilder<'a> {
-                Self {
-                    host: None,
-                    ports: None,
-                    default_error_paths: None,
-                    body_size_limit: None,
-                    routes: None,
-                }
-            }
-
-            pub fn host(&mut self, host_addr: &'a str) -> &mut Self {
-                self.host = Some(host_addr);
-                self
-            }
-
-            pub fn ports(&mut self, ports: Vec<Port>) -> &mut Self {
-                self.ports = Some(ports);
-                self
-            }
-
-            pub fn default_error_paths(&mut self, paths: Vec<&'a Path>) -> &mut Self {
-                self.default_error_paths = Some(paths);
-                self
-            }
-
-            pub fn body_size_limit(&mut self, limit: u128) -> &mut Self {
-                self.body_size_limit = Some(limit);
-                self
-            }
-
-            pub fn routes(&mut self, routes: Vec<Route<'a>>) -> &mut Self {
-                self.routes = Some(routes);
-                self
-            }
-
-            pub fn build(&self) -> ServerConfig<'a> {
-                ServerConfig {
-                    host: self.host.expect("Invalid host"),
-                    ports: self.ports.clone().expect("Invalid ports"),
-                    default_error_paths: self.default_error_paths.clone().expect("Invalid paths"),
-                    body_size_limit: self.body_size_limit.expect("Invalid size limit"),
-                    routes: self.routes.clone().expect("Invalid routes"),
-                }
-            }
-        }
-    }
-
     pub mod route {
-        use crate::server_config::route::cgi::Cgi;
-        use crate::type_aliases::Endpoint;
+        use crate::server::Cgi;
+        use crate::server_config::ServerConfig;
+        use crate::type_aliases::{Bytes, FileExtension, Path};
+        use http::{Method, Request, Response, StatusCode};
         use std::collections::HashMap;
-        use std::path::Path;
+
+        pub type HandlerFunc =
+            fn(req: &Request<String>, conf: &ServerConfig) -> Result<Response<Bytes>, StatusCode>;
 
         #[derive(Clone, Debug)]
         pub struct Route<'a> {
-            pub accepted_http_methods: Vec<http::Method>,
-            pub http_redirections: HashMap<Endpoint<'a>, Endpoint<'a>>, // From endpoint, to endpoint
-            pub default_if_url_is_dir: &'a Path,
-            pub default_if_request_is_dir: &'a Path,
-            pub cgi: Cgi,
-            pub list_directory: bool,
+            pub path: Path<'a>,
+            pub methods: Vec<Method>,
+            pub handler: Option<HandlerFunc>,
+            pub settings: Option<Settings<'a>>,
         }
 
-        pub mod cgi {
-            #[derive(Clone, Debug, Default)]
-            pub enum Cgi {
-                #[default]
-                Python,
-                PHP,
-                JavaScript,
+        #[derive(Clone, Debug)]
+        pub struct Settings<'a> {
+            pub http_redirections: Vec<Path<'a>>, // From endpoint, to path
+            pub redirect_status_code: StatusCode,
+            pub root_path: Option<Path<'a>>,
+            pub default_if_url_is_dir: Path<'a>, // TODO: Implement
+            pub default_if_request_is_dir: Path<'a>, // TODO: Implement
+            pub cgi_def: HashMap<FileExtension<'a>, Cgi>,
+            pub list_directory: bool, // TODO: Implement
+        }
+
+        impl Settings<'_> {
+            pub fn format_path(&self, path: Path) -> String {
+                if self.root_path.is_some() {
+                    format!("{}{}", self.root_path.unwrap(), path)
+                } else {
+                    format!("src{}", path)
+                }
             }
         }
     }
 }
-pub mod type_aliases {
-    pub type Port = u16;
-    pub type Endpoint<'a> = &'a str;
-}
 
-pub mod client {
-    pub struct Client {
-        pub ip: String,
-        // Add all required fields here
-    }
-}
 pub mod server {
-    pub use crate::client::Client;
-    pub use crate::type_aliases::Port;
+    pub mod handle;
+    pub use handle::*;
 
-    pub struct Server<T> {
-        pub ip_addr: String,
-        pub ports: Vec<Port>,
-        pub clients: Vec<Client>,
-        pub pending_requests: Vec<http::Request<T>>, // Add all required fields here
+    use crate::server_config::route::Route;
+    use crate::type_aliases::Bytes;
+    use http::{Method, Request, Response, StatusCode};
+    use std::io;
+    use std::io::{Read, Write};
+
+    use crate::server_config::ServerConfig;
+    use mio::net::{TcpListener, TcpStream};
+    use mio::{Events, Interest, Poll, Token};
+    use std::collections::HashMap;
+    use std::net::SocketAddr;
+
+    use std::sync::Arc;
+    pub mod requests;
+
+    pub use requests::*;
+    pub mod responses;
+    pub use responses::*;
+    pub mod methods;
+    pub use methods::*;
+    pub mod cgi;
+    pub use cgi::*;
+    pub mod routes;
+    pub use routes::*;
+    pub mod start;
+    pub use start::*;
+
+    pub mod sessions;
+    pub use sessions::*;
+
+    mod state;
+    pub use state::*;
+
+    #[derive(Debug)]
+    pub struct Server<'a> {
+        pub listeners: Vec<TcpListener>,
+        pub config: ServerConfig<'a>,
+    }
+
+    impl<'a> Server<'a> {
+        pub fn new(listeners: Vec<TcpListener>, config: ServerConfig<'a>) -> Self {
+            Self { listeners, config }
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct Listener<'a> {
+        pub listener: TcpListener,
+        pub token: Token,
+        pub config: Arc<ServerConfig<'a>>,
+    }
+
+    impl Listener<'_> {
+        pub fn accept(&self) -> io::Result<(TcpStream, SocketAddr)> {
+            self.listener.accept()
+        }
     }
 }
