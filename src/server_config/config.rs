@@ -1,4 +1,4 @@
-use crate::server::{add_cookie, delete_cookie, validate_cookie};
+use crate::handlers::*;
 pub use crate::server_config::*;
 pub fn server_config() -> Vec<ServerConfig<'static>> {
     vec![ServerConfig {
