@@ -26,6 +26,18 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 settings: None,
             },
             Route {
+                path: "/api/upload",
+                methods: vec![http::Method::POST],
+                handler: Some(upload_content),
+                settings: None,
+            },
+            Route {
+                path: "/api/delete",
+                methods: vec![http::Method::DELETE],
+                handler: Some(delete_target),
+                settings: None,
+            },
+            Route {
                 path: "/test.png",
                 methods: vec![http::Method::GET],
                 handler: None,
