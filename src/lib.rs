@@ -22,15 +22,26 @@ pub mod server_config {
 
     pub mod route {
         use crate::server::Cgi;
-        use crate::type_aliases::{FileExtension, Path};
+        use crate::server_config::ServerConfig;
+        use crate::type_aliases::{Bytes, FileExtension, Path};
+        use http::{Method, Request, Response, StatusCode};
         use std::collections::HashMap;
+
+        pub type HandlerFunc =
+            fn(req: &Request<String>, conf: &ServerConfig) -> Result<Response<Bytes>, StatusCode>;
 
         #[derive(Clone, Debug)]
         pub struct Route<'a> {
             pub path: Path<'a>,
-            pub accepted_http_methods: Vec<http::Method>,
+            pub methods: Vec<Method>,
+            pub handler: Option<HandlerFunc>,
+            pub settings: Option<Settings<'a>>,
+        }
+
+        #[derive(Clone, Debug)]
+        pub struct Settings<'a> {
             pub http_redirections: Vec<Path<'a>>, // From endpoint, to path
-            pub redirect_status_code: http::StatusCode,
+            pub redirect_status_code: StatusCode,
             pub root_path: Option<Path<'a>>,
             pub default_if_url_is_dir: Path<'a>, // TODO: Implement
             pub default_if_request_is_dir: Path<'a>, // TODO: Implement
@@ -38,7 +49,7 @@ pub mod server_config {
             pub list_directory: bool, // TODO: Implement
         }
 
-        impl Route<'_> {
+        impl Settings<'_> {
             pub fn format_path(&self, path: Path) -> String {
                 if self.root_path.is_some() {
                     format!("{}{}", self.root_path.unwrap(), path)
@@ -80,6 +91,9 @@ pub mod server {
     pub use routes::*;
     pub mod start;
     pub use start::*;
+
+    pub mod sessions;
+    pub use sessions::*;
 
     mod state;
     pub use state::*;

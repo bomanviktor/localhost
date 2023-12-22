@@ -29,8 +29,16 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
         Err((code, _)) => return serve_response(stream, error(code, config)),
     };
 
-    if is_cgi_request(&request.uri().to_string()) {
-        match execute_cgi_script(&request_string, config, &route) {
+    if route.handler.is_some() {
+        let handler = route.handler.unwrap();
+        match handler(&request, config) {
+            Ok(response) => return serve_response(stream, response),
+            Err(code) => return serve_response(stream, error(code, config)),
+        }
+    }
+
+    if route.settings.is_some() && is_cgi_request(&request.uri().to_string()) {
+        match execute_cgi_script(&request_string, config, &route.settings.unwrap()) {
             Ok(resp) => {
                 stream.write_all(&resp).unwrap();
                 stream.flush().expect("could not flush");

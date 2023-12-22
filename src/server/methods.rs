@@ -13,7 +13,7 @@ pub fn get_method(req: &str) -> Result<Method, http::method::InvalidMethod> {
 }
 
 pub fn method_is_allowed(method: &Method, route: &Route) -> bool {
-    route.accepted_http_methods.contains(method)
+    route.methods.contains(method)
 }
 
 pub fn handle_method(
@@ -21,11 +21,6 @@ pub fn handle_method(
     req: &Request<String>,
     config: &ServerConfig,
 ) -> Result<Response<Bytes>, StatusCode> {
-    // Handle no content type on UNSAFE methods here
-    if !req.method().is_safe() && !req.headers().contains_key(CONTENT_TYPE) {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-
     //==================================//
     //  Add middleware here. Example:   //
     //  Verify allowed content types.   //
@@ -147,7 +142,7 @@ mod safe {
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let allowed_methods = route
-            .accepted_http_methods
+            .methods
             .iter()
             .map(|method| method.as_str())
             .collect::<Vec<&str>>()

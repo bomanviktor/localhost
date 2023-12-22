@@ -8,6 +8,7 @@ use std::str::from_utf8_unchecked;
 ///
 /// This function will call the unsafe method `from_utf8_unchecked`
 pub unsafe fn format_response(response: Response<Bytes>) -> Bytes {
+    println!("{:#?}", String::from_utf8(response.body().clone()).unwrap());
     // Split up the response into head and parts
     let (head, body) = response.into_parts();
     let mut resp = format!("{:?} {}\r\n", head.version, head.status);

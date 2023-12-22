@@ -20,7 +20,10 @@ pub fn get_route<'a>(
     }
 
     if is_redirect(url_path, routed_path) {
-        return Err((route.redirect_status_code, routed_path.to_string()));
+        return Err((
+            route.settings.unwrap().redirect_status_code,
+            routed_path.to_string(),
+        ));
     }
 
     // Check if the method is allowed on route

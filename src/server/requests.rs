@@ -47,7 +47,16 @@ pub mod path {
             if route.path == requested_path {
                 return Some((i, route.path));
             }
-            if route.http_redirections.contains(&requested_path) {
+            if route.settings.is_none() {
+                continue;
+            }
+            if route
+                .settings
+                .clone()
+                .unwrap()
+                .http_redirections
+                .contains(&requested_path)
+            {
                 return Some((i, route.path));
             }
         }
