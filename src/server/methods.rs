@@ -5,6 +5,31 @@ use http::header::{ALLOW, CONTENT_LENGTH, CONTENT_TYPE, HOST};
 use std::fs;
 use std::str::FromStr;
 
+pub fn handle_method(
+    route: &Route,
+    req: &Request<String>,
+    config: &ServerConfig,
+) -> Result<Response<Bytes>, StatusCode> {
+    match *req.method() {
+        //==============//
+        // SAFE METHODS //
+        //==============//
+        Method::GET => safe::get(req, config),
+        Method::OPTIONS => safe::options(route, req, config),
+        Method::HEAD => safe::head(req, config),
+        Method::TRACE => safe::trace(req, config),
+        //================//
+        // UNSAFE METHODS //
+        //================//
+        Method::POST => not_safe::post(req),
+        Method::PUT => not_safe::put(req),
+        Method::PATCH => not_safe::patch(req),
+        Method::DELETE => not_safe::delete(req),
+        Method::CONNECT => unimplemented!(),
+        _ => Err(StatusCode::METHOD_NOT_ALLOWED),
+    }
+}
+
 pub fn get_method(req: &str) -> Result<Method, http::method::InvalidMethod> {
     let line = get_line(req, 0);
     let method = get_split_index(line, 0);
@@ -14,37 +39,6 @@ pub fn get_method(req: &str) -> Result<Method, http::method::InvalidMethod> {
 
 pub fn method_is_allowed(method: &Method, route: &Route) -> bool {
     route.methods.contains(method)
-}
-
-pub fn handle_method(
-    route: &Route,
-    req: &Request<String>,
-    config: &ServerConfig,
-) -> Result<Response<Bytes>, StatusCode> {
-    //==================================//
-    //  Add middleware here. Example:   //
-    //  Verify allowed content types.   //
-    //==================================//
-
-    let resp = match *req.method() {
-        //==============//
-        // SAFE METHODS //
-        //==============//
-        Method::GET => safe::get(req, config)?,
-        Method::OPTIONS => safe::options(route, req, config)?,
-        Method::HEAD => safe::head(req, config)?,
-        Method::TRACE => safe::trace(req, config)?,
-        //================//
-        // UNSAFE METHODS //
-        //================//
-        Method::POST => not_safe::post(req)?,
-        Method::PUT => not_safe::put(req)?,
-        Method::PATCH => not_safe::patch(req)?,
-        Method::DELETE => not_safe::delete(req)?,
-        Method::CONNECT => unimplemented!(),
-        _ => return Err(StatusCode::BAD_REQUEST),
-    };
-    Ok(resp)
 }
 
 mod safe {
@@ -177,7 +171,7 @@ mod safe {
     }
 }
 
-mod not_safe {
+pub mod not_safe {
     use super::*;
     use http::header::LOCATION;
     pub fn post(req: &Request<String>) -> Result<Response<Bytes>, StatusCode> {
