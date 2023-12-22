@@ -85,8 +85,6 @@ pub mod version {
 }
 
 pub mod headers {
-    use crate::server::utils::get_split_index;
-
     pub fn get_headers(req: &str) -> Vec<&str> {
         // Remove the body from the request
         let head = req
@@ -110,50 +108,6 @@ pub mod headers {
 
         if key_value.len() == 2 {
             Some((key_value[0], key_value[1]))
-        } else {
-            None
-        }
-    }
-
-    /// `set_cookies` takes care of the `Set-Cookie` header
-    pub fn set_cookies(req: &str) -> Option<Vec<&str>> {
-        let cookies = req
-            .split("\r\n")
-            .filter(|l| l.contains("Set-Cookie"))
-            .map(|cookie| get_split_index(cookie, 1)) // "Set-Cookie: foo_bar=baz" -> "foo_bar=baz"
-            .collect::<Vec<&str>>();
-
-        if !cookies.is_empty() {
-            Some(cookies)
-        } else {
-            None
-        }
-    }
-
-    /// `get_cookies` takes care of the `Cookie` header
-    pub fn get_cookies(req: &str) -> Option<Vec<&str>> {
-        if let Some(cookies) = req.split("\r\n").find(|line| line.contains("Cookie")) {
-            return Some(cookies.split(';').collect::<Vec<&str>>());
-        }
-        None
-    }
-
-    /// `get_content_type` gets the `Content-Length` header for state changing methods
-    pub fn get_content_length(req: &str) -> Option<&str> {
-        if let Some(line) = req.split("\r\n").find(|&l| l.contains("Content-Length")) {
-            let content_length = get_split_index(line, 1);
-            // "Content-Length: 1337" -> "1337"
-            return Some(content_length);
-        }
-        None
-    }
-
-    /// `get_content_type` gets the `Content-Type` header for state changing methods
-    pub fn get_content_type(req: &str) -> Option<&str> {
-        if let Some(line) = req.split('\n').find(|&l| l.contains("Content-Type")) {
-            let content_type = get_split_index(line, 1);
-            // "Content-Type: text/html" -> "text/html"
-            Some(content_type)
         } else {
             None
         }
