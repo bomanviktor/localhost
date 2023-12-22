@@ -178,8 +178,6 @@ pub mod body {
 }
 
 pub mod utils {
-    use crate::type_aliases::Bytes;
-
     /// `get_split_index` gets the `&str` at `index` after performing `split_whitespace`
     pub fn get_split_index(str: &str, index: usize) -> &str {
         let lines = str.split_whitespace().collect::<Vec<&str>>();
@@ -205,9 +203,5 @@ pub mod utils {
         } else {
             lines[index]
         }
-    }
-
-    pub fn to_bytes(str: &str) -> Bytes {
-        str.as_bytes().to_vec()
     }
 }

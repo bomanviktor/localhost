@@ -1,4 +1,3 @@
-use crate::server::utils::to_bytes;
 use crate::server::{Bytes, Response, ServerConfig, StatusCode};
 use http::Version;
 use std::fs;
@@ -28,7 +27,7 @@ pub unsafe fn format_response(response: Response<Bytes>) -> Bytes {
         resp.push_str("\r\n");
     }
 
-    to_bytes(&resp)
+    Bytes::from(resp)
 }
 
 pub fn content_type(path: &str) -> String {
@@ -128,7 +127,7 @@ pub mod errors {
     pub fn error(code: StatusCode, config: &ServerConfig) -> Response<Bytes> {
         let error_body = match check_errors(code, config) {
             Ok(b) => b,
-            Err(_) => to_bytes(&format!("{code}")),
+            Err(_) => Bytes::from(format!("{code}")),
         };
 
         Response::builder()
