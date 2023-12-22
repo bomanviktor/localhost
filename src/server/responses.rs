@@ -1,5 +1,6 @@
 use crate::server::utils::to_bytes;
 use crate::server::{Bytes, Response, ServerConfig, StatusCode};
+use http::header::TRANSFER_ENCODING;
 use http::Version;
 use std::fs;
 use std::str::from_utf8_unchecked;
@@ -20,15 +21,33 @@ pub unsafe fn format_response(response: Response<Bytes>) -> Bytes {
         resp.push_str(&header);
     }
 
-    if !body.is_empty() {
-        unsafe {
-            resp.push_str(&format!("\r\n{}", from_utf8_unchecked(&body)));
+    resp.push_str("\r\n");
+    if body.is_empty() {
+        return to_bytes(&resp);
+    }
+
+    // Make this dynamic
+    let chunk_size = body.len() / 10;
+
+    unsafe {
+        if is_chunked(head) {
+            for chunk in body.chunks(chunk_size) {
+                let size = chunk.len();
+                resp.push_str(&format!("{:X}\r\n{}\r\n", size, from_utf8_unchecked(chunk)));
+            }
+            resp.push_str("0\r\n\r\n"); // End of chunks
+        } else {
+            resp.push_str(from_utf8_unchecked(&body)); // No chunks
         }
-    } else {
-        resp.push_str("\r\n");
     }
 
     to_bytes(&resp)
+}
+fn is_chunked(head: http::response::Parts) -> bool {
+    head.headers
+        .get_all(TRANSFER_ENCODING)
+        .iter()
+        .any(|value| value.to_str().unwrap().to_uppercase() == "CHUNKED")
 }
 
 pub fn content_type(path: &str) -> String {
