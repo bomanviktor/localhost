@@ -35,12 +35,12 @@ pub fn upload_content(
     if fs::write(path, req.body()).is_err() {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
-
+    let body = format!("{:?} was successfully uploaded", path.file_name().unwrap());
     match Response::builder()
         .version(req.version())
         .status(StatusCode::CREATED)
         .header(CONTENT_TYPE, content_type)
-        .body(Bytes::from("Content uploaded."))
+        .body(Bytes::from(body))
     {
         Ok(resp) => Ok(resp),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),

@@ -36,11 +36,12 @@ pub fn delete_target(
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
+    let body = format!("{:?} was successfully deleted", path.file_name().unwrap());
     match Response::builder()
         .status(StatusCode::OK)
         .version(req.version())
         .header(HOST, conf.host)
-        .body(Bytes::from("Target deleted."))
+        .body(Bytes::from(body))
     {
         Ok(resp) => Ok(resp),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
@@ -62,8 +63,8 @@ fn unsafe_delete(p: &Path) -> bool {
     if p.extension().is_some_and(|e| e.eq("rs")) {
         return true;
     }
-    let path = p.to_str().unwrap_or_default();
+
     UNSAFE_DELETIONS
         .iter()
-        .any(|&unsafe_path| path.contains(unsafe_path))
+        .any(|&unsafe_path| p.ends_with(unsafe_path))
 }
