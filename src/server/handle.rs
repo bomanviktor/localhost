@@ -31,10 +31,10 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
 
     if route.handler.is_some() {
         let handler = route.handler.unwrap();
-        match handler(&request, config) {
-            Ok(response) => return serve_response(stream, response),
-            Err(code) => return serve_response(stream, error(code, config)),
-        }
+        return match handler(&request, config) {
+            Ok(response) => serve_response(stream, response),
+            Err(code) => serve_response(stream, error(code, config)),
+        };
     }
 
     if route.settings.is_some() && is_cgi_request(&request.uri().to_string()) {
@@ -49,10 +49,9 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
     }
 
     match handle_method(&route, &request, config) {
-        Ok(response) => serve_response(stream, response)?,
-        Err(code) => serve_response(stream, error(code, config))?,
+        Ok(response) => serve_response(stream, response),
+        Err(code) => serve_response(stream, error(code, config)),
     }
-    Ok(())
 }
 
 pub fn serve_response(stream: &mut TcpStream, response: Response<Bytes>) -> io::Result<()> {
