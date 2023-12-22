@@ -6,35 +6,33 @@ use http::{HeaderValue, Request, Response, StatusCode};
 
 type Cookie = str;
 
-pub fn update_cookie(
+pub fn add_cookie(
     req: &Request<String>,
     conf: &ServerConfig,
 ) -> Result<Response<Bytes>, StatusCode> {
-    // Replace with
-    if req
-        .headers()
-        .iter()
-        .any(|(_, v)| v.to_str().unwrap().contains("cookie"))
-    {
-        return match remove_cookie(
-            Response::builder()
-                .status(StatusCode::OK)
-                .version(req.version()),
-            "grit:lab-cookie",
-        ) // Replace this with a database value.
-        .header(HOST, conf.host)
-        .body(vec![])
-        {
-            Ok(resp) => Ok(resp),
-            Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
-        };
-    }
-
     match set_cookie(
         Response::builder()
             .status(StatusCode::OK)
             .version(req.version()),
-        "grit:lab-cookie",
+        "grit-lab=cookie",
+    ) // Replace this with a database value.
+    .header(HOST, conf.host)
+    .body(vec![])
+    {
+        Ok(resp) => Ok(resp),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+pub fn delete_cookie(
+    req: &Request<String>,
+    conf: &ServerConfig,
+) -> Result<Response<Bytes>, StatusCode> {
+    match remove_cookie(
+        Response::builder()
+            .status(StatusCode::OK)
+            .version(req.version()),
+        "grit-lab",
     ) // Replace this with a database value.
     .header(HOST, conf.host)
     .body(vec![])
@@ -48,7 +46,7 @@ pub fn validate_cookie(
     req: &Request<String>,
     conf: &ServerConfig,
 ) -> Result<Response<Bytes>, StatusCode> {
-    let value = match get_cookie(req, "grit:lab-cookie") {
+    let value = match get_cookie(req, "grit-lab=cookie") {
         // Replace this with a database value.
         Some(c) => c.to_str().unwrap_or_default(),
         None => return Err(StatusCode::UNAUTHORIZED),
@@ -77,7 +75,7 @@ pub fn set_cookie(resp: Builder, value: &Cookie) -> Builder {
 }
 
 pub fn remove_cookie(resp: Builder, value: &Cookie) -> Builder {
-    let value = format!("{value}; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT");
+    let value = format!("{value}=; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
     resp.header(SET_COOKIE, value)
 }
 

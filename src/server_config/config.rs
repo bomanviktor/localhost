@@ -1,4 +1,4 @@
-use crate::server::{update_cookie, validate_cookie};
+use crate::server::{add_cookie, delete_cookie, validate_cookie};
 pub use crate::server_config::*;
 pub fn server_config() -> Vec<ServerConfig<'static>> {
     vec![ServerConfig {
@@ -8,9 +8,15 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
         body_size_limit: 1024,
         routes: vec![
             Route {
-                path: "/api/update-cookie",
+                path: "/api/add-cookie",
                 methods: vec![http::Method::POST],
-                handler: Some(update_cookie),
+                handler: Some(add_cookie),
+                settings: None,
+            },
+            Route {
+                path: "/api/delete-cookie",
+                methods: vec![http::Method::POST],
+                handler: Some(delete_cookie),
                 settings: None,
             },
             Route {
