@@ -16,7 +16,7 @@ pub fn delete_target(
         return Err(StatusCode::UNAUTHORIZED);
     }
 
-    let path = match get_path(req) {
+    let path = match get_target_location(req) {
         Ok(path) => path,
         Err(e) => return Err(e),
     };
