@@ -19,6 +19,12 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 handler: Some(validate_cookie),
                 settings: None,
             },
+            Route {
+                path: "/test.png",
+                methods: vec![http::Method::GET],
+                handler: None,
+                settings: None,
+            },
         ],
     }]
 }

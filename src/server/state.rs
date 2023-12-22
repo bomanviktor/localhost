@@ -115,7 +115,7 @@ fn handle_existing_connection(
         return;
     }
 
-    let (stream, conf) = connections.get_mut(&token).unwrap();
+    let (stream, conf) = &mut connections.remove(&token).unwrap();
     if let Err(e) = crate::server::handle_client(stream, conf) {
         match e.kind() {
             ErrorKind::BrokenPipe => eprintln!("Client disconnected: {e}"),
