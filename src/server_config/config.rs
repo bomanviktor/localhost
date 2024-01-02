@@ -25,6 +25,12 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 handler: None,
                 settings: None,
             },
+            Route {
+                path: "/test",
+                methods: vec![http::Method::GET, http::Method::POST],
+                handler: None,
+                settings: None,
+            },
         ],
     }]
 }

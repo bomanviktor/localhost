@@ -12,19 +12,86 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
         Err(_) => return Err(StatusCode::METHOD_NOT_ALLOWED),
     };
 
-    let mut request = Request::builder().method(method).uri(path).version(version);
+    let headers = headers::get_headers(req_str);
+    let is_chunked = headers.iter().any(|header| {
+        let parts: Vec<&str> = header.splitn(2, ": ").collect();
+        parts.len() == 2
+            && parts[0].eq_ignore_ascii_case("transfer-encoding")
+            && parts[1].contains("chunked")
+    });
 
-    for header in headers::get_headers(req_str) {
+    let body_start_index = req_str.find("\r\n\r\n").unwrap_or(req_str.len());
+    let body_str = &req_str[body_start_index + 4..]; // "+ 4" to skip past "\r\n\r\n"
+
+    let body = if is_chunked {
+        match handle_chunked_body(body_str, conf.body_size_limit) {
+            Ok(body) => body,
+            Err(status) => return Err(status),
+        }
+    } else {
+        body::get_body(req_str, conf.body_size_limit).unwrap_or_default()
+    };
+
+    // Constructing the request with parsed headers and body
+    let mut request_builder = http::Request::builder()
+        .method(method)
+        .uri(path)
+        .version(version);
+
+    for header in headers {
         if let Some((key, value)) = headers::format_header(header) {
-            request = request.header(key, value);
+            request_builder = request_builder.header(key, value);
         }
     }
 
-    let body = body::get_body(req_str, conf.body_size_limit).unwrap_or_default();
-    match request.body(body) {
+    match request_builder.body(body) {
         Ok(request) => Ok(request),
         Err(_) => Err(StatusCode::BAD_REQUEST),
     }
+}
+
+fn handle_chunked_body(body_str: &str, limit: usize) -> Result<String, StatusCode> {
+    let mut body = String::new();
+    let mut remaining_str = body_str;
+
+    while !remaining_str.is_empty() {
+        // Split at the first occurrence of CRLF
+        if let Some((size_str, rest)) = remaining_str.split_once("\r\n") {
+            // Parse the chunk size
+            let chunk_size = match usize::from_str_radix(size_str.trim(), 16) {
+                Ok(size) => size,
+                Err(_) => return Err(StatusCode::BAD_REQUEST),
+            };
+
+            // Check for the end of the chunked body
+            if chunk_size == 0 {
+                break;
+            }
+
+            // Ensure there's enough data for the chunk
+            if rest.len() < chunk_size {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+
+            // Extract the chunk data
+            let (chunk_data, after_chunk) = rest.split_at(chunk_size);
+            println!("Chunk data: {}", chunk_data);
+            println!("After chunk: {}", after_chunk);
+            body.push_str(chunk_data);
+
+            // Check body size limit
+            if body.len() > limit {
+                return Err(StatusCode::PAYLOAD_TOO_LARGE);
+            }
+
+            // Prepare for the next iteration, skip past the chunk data and CRLF
+            remaining_str = &after_chunk[2..]; // Assumes CRLF is always present
+        } else {
+            return Err(StatusCode::BAD_REQUEST); // Missing CRLF after chunk size
+        }
+    }
+
+    Ok(body)
 }
 
 pub mod path {
