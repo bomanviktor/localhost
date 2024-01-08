@@ -1,3 +1,7 @@
+use std::collections::HashMap;
+
+use config::route::Settings;
+
 use crate::server::{update_cookie, validate_cookie};
 pub use crate::server_config::*;
 pub fn server_config() -> Vec<ServerConfig<'static>> {
@@ -23,7 +27,30 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 path: "/test.png",
                 methods: vec![http::Method::GET],
                 handler: None,
-                settings: None,
+                settings: Some(Settings {
+                    http_redirections: vec![],
+                    redirect_status_code: http::StatusCode::MOVED_PERMANENTLY,
+                    root_path: Some("./rootqweeqw"),
+                    default_if_url_is_dir: "index.html",
+                    default_if_request_is_dir: "index.html",
+                    cgi_def: HashMap::new(),
+                    list_directory: false,
+                }),
+            },
+            Route {
+                path: "/files", // this is does not allow files/* to be accessed
+                methods: vec![http::Method::GET],
+                handler: None,
+                //test directory listing
+                settings: Some(Settings {
+                    http_redirections: vec![],
+                    redirect_status_code: http::StatusCode::MOVED_PERMANENTLY,
+                    root_path: Some("./root123"), // not really working yet
+                    default_if_url_is_dir: "index.html", //WIP
+                    default_if_request_is_dir: "index.html", //WIP
+                    cgi_def: HashMap::new(),
+                    list_directory: true,
+                }),
             },
             Route {
                 path: "/test",

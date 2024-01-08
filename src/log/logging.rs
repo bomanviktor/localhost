@@ -30,8 +30,8 @@ pub fn init_logs() {
 
         if path.exists() {
             let now = Local::now();
-            let timestamp = now.format("%Y%m%d%H%M%S").to_string();
-            let new_file_name = format!("{}_{}.log", file_path.trim_end_matches(".log"), timestamp);
+            let timestamp = now.format("%Y-%m-%d-%H:%M:%S").to_string();
+            let new_file_name = format!("{}-{}.log", file_path.trim_end_matches(".log"), timestamp);
 
             fs::rename(file_path, &new_file_name).expect("Unable to rename file");
         }
