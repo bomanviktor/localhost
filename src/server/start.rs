@@ -4,7 +4,6 @@ use crate::server::{Server, SocketAddr, TcpListener};
 use crate::server_config::server_config;
 
 pub fn start(servers: Vec<Server<'static>>) {
-    rename_server_and_client_logs();
     let mut s = ServerState::init(servers);
     loop {
         s.poll();

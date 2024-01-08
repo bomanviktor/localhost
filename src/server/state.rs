@@ -118,9 +118,9 @@ fn handle_existing_connection(
     let (stream, conf) = &mut connections.remove(&token).unwrap();
     if let Err(e) = crate::server::handle_client(stream, conf) {
         match e.kind() {
-            ErrorKind::BrokenPipe => eprintln!("Client disconnected: {e}"),
-            ErrorKind::WouldBlock => eprintln!("Client is blocking: {e}"),
-            _ => eprintln!("Error handling client: {e}"),
+            ErrorKind::BrokenPipe => log("client", format!("Client disconnected: {e}")),
+            ErrorKind::WouldBlock => log("client", format!("Client is blocking: {e}")),
+            _ => log("client", format!("Error handling client: {e}")),
         }
     }
     poll.registry()
@@ -128,6 +128,7 @@ fn handle_existing_connection(
         .expect("Failed to deregister stream");
 }
 
+use crate::log::log;
 use socket2::{SockRef, Socket};
 
 // Function to set linger option on a mio TcpStream

@@ -7,18 +7,22 @@ use std::path::Path;
 
 pub fn rename_server_and_client_logs() {
     let files = [
-        "src/log/log_files/server.log",
-        "src/log/log_files/client.log",
+        "./src/log/log_files/server.log",
+        "./src/log/log_files/client.log",
     ];
 
     for file_path in &files {
         let path = Path::new(file_path);
-
+        // Check if the file exists
         if path.exists() {
+            // Generate a timestamp
             let now = Local::now();
             let timestamp = now.format("%Y%m%d%H%M%S").to_string();
+
+            // Create a new file name with a timestamp
             let new_file_name = format!("{}_{}.log", file_path.trim_end_matches(".log"), timestamp);
 
+            // Rename the existing file with the new file name
             fs::rename(file_path, &new_file_name).expect("Unable to rename file");
         }
     }
