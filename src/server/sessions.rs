@@ -1,3 +1,4 @@
+use crate::log::log;
 use crate::server_config::ServerConfig;
 use crate::type_aliases::Bytes;
 use http::header::{COOKIE, HOST, SET_COOKIE};
@@ -26,7 +27,10 @@ pub fn update_cookie(
         .body(vec![])
         {
             Ok(resp) => Ok(resp),
-            Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+            Err(_) => {
+                log("server", "Error: Failed to remove cookie".to_string()); //ToDo:format with cookie value
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
         };
     }
 
@@ -40,7 +44,10 @@ pub fn update_cookie(
     .body(vec![])
     {
         Ok(resp) => Ok(resp),
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Err(_) => {
+            log("server", "Error: Failed to set cookie".to_string()); //ToDo:format with cookie value
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
     }
 }
 
@@ -51,10 +58,14 @@ pub fn validate_cookie(
     let value = match get_cookie(req, "grit:lab-cookie") {
         // Replace this with a database value.
         Some(c) => c.to_str().unwrap_or_default(),
-        None => return Err(StatusCode::UNAUTHORIZED),
+        None => {
+            log("server", "Error: Failed to get cookie".to_string()); //ToDo:format with cookie value
+            return Err(StatusCode::UNAUTHORIZED);
+        }
     };
 
     if value.is_empty() {
+        log("server", "Error: cookie value empty".to_string()); //ToDo:format with cookie value
         return Err(StatusCode::UNAUTHORIZED);
     }
 
@@ -68,7 +79,10 @@ pub fn validate_cookie(
     .body(vec![])
     {
         Ok(resp) => Ok(resp),
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Err(_) => {
+            log("server", "Error: Failed to validate cookie".to_string()); //ToDo:format with cookie value
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
     }
 }
 
