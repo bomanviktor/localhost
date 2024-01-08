@@ -61,6 +61,11 @@ pub mod server_config {
     }
 }
 
+pub mod log {
+    pub mod logging;
+    pub use logging::*;
+}
+
 pub mod server {
     pub mod handle;
     pub use handle::*;
