@@ -1,3 +1,4 @@
+use crate::log::log;
 use crate::server::errors::error;
 use crate::server::handle_method;
 use crate::server::redirections::redirect;
@@ -11,14 +12,20 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
     let request_string = match String::from_utf8(buffer[..bytes_read].to_vec()) {
         Ok(request_str) => request_str,
         Err(e) => {
-            eprintln!("Error reading from buffer to string: {e}");
+            log(
+                "server",
+                format!("Error reading from buffer to string: {e}"),
+            );
             return Ok(());
         }
     };
 
     let request = match get_request(config, &request_string) {
         Ok(req) => req,
-        Err(e) => return serve_response(stream, error(e, config)),
+        Err(e) => {
+            log("server", format!("Error: {}", e));
+            return serve_response(stream, error(e, config));
+        }
     };
 
     let route = match get_route(&request, config) {
@@ -26,14 +33,20 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
         Err((code, path)) if code.is_redirection() => {
             return serve_response(stream, redirect(code, config, request.version(), path));
         }
-        Err((code, _)) => return serve_response(stream, error(code, config)),
+        Err((code, _)) => {
+            log("server", format!("Error: {}", &code));
+            return serve_response(stream, error(code, config));
+        }
     };
 
     if route.handler.is_some() {
         let handler = route.handler.unwrap();
         match handler(&request, config) {
             Ok(response) => return serve_response(stream, response),
-            Err(code) => return serve_response(stream, error(code, config)),
+            Err(code) => {
+                log("server", format!("Error: {}", &code));
+                return serve_response(stream, error(code, config));
+            }
         }
     }
 
@@ -43,14 +56,20 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
                 stream.write_all(&resp).unwrap();
                 stream.flush().expect("could not flush");
             }
-            Err(code) => return serve_response(stream, error(code, config)),
+            Err(code) => {
+                log("server", format!("Error: {}", &code));
+                return serve_response(stream, error(code, config));
+            }
         }
         return Ok(());
     }
 
     match handle_method(&route, &request, config) {
         Ok(response) => serve_response(stream, response)?,
-        Err(code) => serve_response(stream, error(code, config))?,
+        Err(code) => {
+            log("server", format!("Error: {}", &code));
+            serve_response(stream, error(code, config))?
+        }
     }
     Ok(())
 }
