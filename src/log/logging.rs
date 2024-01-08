@@ -5,24 +5,31 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 
-pub fn rename_server_and_client_logs() {
-    let files = [
-        "./src/log/log_files/server.log",
-        "./src/log/log_files/client.log",
-    ];
+pub enum LogFileType {
+    Server,
+    Client,
+}
 
-    for file_path in &files {
+impl LogFileType {
+    fn file_path(&self) -> &'static str {
+        match self {
+            LogFileType::Server => "./src/log/log_files/server.log",
+            LogFileType::Client => "./src/log/log_files/client.log",
+        }
+    }
+}
+pub fn rename_server_and_client_logs() {
+    let files = [LogFileType::Server, LogFileType::Client];
+
+    for file_type in &files {
+        let file_path = file_type.file_path();
         let path = Path::new(file_path);
-        // Check if the file exists
+
         if path.exists() {
-            // Generate a timestamp
             let now = Local::now();
             let timestamp = now.format("%Y%m%d%H%M%S").to_string();
-
-            // Create a new file name with a timestamp
             let new_file_name = format!("{}_{}.log", file_path.trim_end_matches(".log"), timestamp);
 
-            // Rename the existing file with the new file name
             fs::rename(file_path, &new_file_name).expect("Unable to rename file");
         }
     }
@@ -31,27 +38,20 @@ pub fn rename_server_and_client_logs() {
 // Usage example
 // log("server", "This is a test log message");
 // log("client", "This is a test log message");
-pub fn log(file: &str, log_message: String) {
-    if file.is_empty() || log_message.is_empty() {
+pub fn log(file_type: LogFileType, log_message: String) {
+    if log_message.is_empty() {
         return;
     }
 
-    let log_file = match file {
-        "server" => "src/log/log_files/server.log",
-        "client" => "src/log/log_files/client.log",
-        _ => "src/log/log_files/server.log",
-    };
+    let log_file = file_type.file_path();
 
     let mut message = String::new();
-
     let line = line!();
     let file_source = file!();
 
     let now = Local::now();
     write!(message, "[{}]", now.format("%d/%m/%y %H:%M:%S")).unwrap();
-
     write!(message, "[{}:{}] ", file_source, line).unwrap();
-
     writeln!(message, "{}", log_message).unwrap();
 
     let mut file = OpenOptions::new()

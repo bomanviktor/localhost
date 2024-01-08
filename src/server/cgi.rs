@@ -1,4 +1,4 @@
-use crate::log::log;
+use crate::log::*;
 use crate::server::{Bytes, ServerConfig, StatusCode};
 use crate::server_config::route::Settings;
 use std::process::Command;
@@ -122,7 +122,10 @@ pub fn execute_cgi_script(
             Cgi::Zig => ("zig", vec!["run".to_string(), path, body]),
         },
         None => {
-            log("server", format!("Error: CGI not found {}", &cgi_path));
+            log(
+                LogFileType::Server,
+                format!("Error: CGI not found {}", &cgi_path),
+            );
             return Err(StatusCode::NOT_FOUND);
         }
     };
@@ -131,7 +134,10 @@ pub fn execute_cgi_script(
     match Command::new(command).args(arguments).output() {
         Ok(output) => Ok(output.stdout),
         Err(e) => {
-            log("server", format!("Error executing CGI script: {}", e));
+            log(
+                LogFileType::Server,
+                format!("Error executing CGI script: {}", e),
+            );
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }

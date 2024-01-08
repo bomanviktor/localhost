@@ -1,5 +1,5 @@
 use super::{Bytes, Method, Request, Response, Route, ServerConfig, StatusCode};
-use crate::log::log;
+use crate::log::*;
 use crate::server::content_type;
 use crate::server::utils::{get_line, get_split_index};
 use http::header::{ALLOW, CONTENT_LENGTH, CONTENT_TYPE, HOST};
@@ -45,7 +45,10 @@ pub fn handle_method(
         Method::CONNECT => unimplemented!(),
         _ => {
             return {
-                log("server", format!("Error: Bad Request {:?}", &req));
+                log(
+                    LogFileType::Server,
+                    format!("Error: Bad Request {:?}", &req),
+                );
                 Err(StatusCode::BAD_REQUEST)
             }
         }
@@ -63,7 +66,10 @@ mod safe {
         let body = match fs::read(format!("src{path}")) {
             Ok(bytes) => bytes,
             Err(_) => {
-                log("server", format!("Error: Path does not exist {}", &path));
+                log(
+                    LogFileType::Server,
+                    format!("Error: Path does not exist {}", &path),
+                );
                 return Err(StatusCode::NOT_FOUND);
             }
         };
@@ -89,7 +95,7 @@ mod safe {
             Ok(metadata) => metadata,
             Err(_) => {
                 log(
-                    "server",
+                    LogFileType::Server,
                     format!("Error: Could not get head for path '{}'", path),
                 );
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
@@ -212,7 +218,10 @@ mod not_safe {
         match fs::write(&path, body) {
             Ok(_) => Ok(resp),
             Err(_) => {
-                log("server", format!("Error: Bad request {:?}", &req));
+                log(
+                    LogFileType::Server,
+                    format!("Error: Bad request {:?}", &req),
+                );
                 Err(StatusCode::BAD_REQUEST)
             }
         }
@@ -231,7 +240,10 @@ mod not_safe {
         match fs::write(path, bytes) {
             Ok(_) => Ok(resp),
             Err(_) => {
-                log("server", format!("Error: Bad request {:?}", &req));
+                log(
+                    LogFileType::Server,
+                    format!("Error: Bad request {:?}", &req),
+                );
                 Err(StatusCode::BAD_REQUEST)
             }
         }
@@ -251,12 +263,18 @@ mod not_safe {
             Ok(_) => match fs::write(path, bytes) {
                 Ok(_) => Ok(resp),
                 Err(_) => {
-                    log("server", format!("Error: Bad request {:?}", &req));
+                    log(
+                        LogFileType::Server,
+                        format!("Error: Bad request {:?}", &req),
+                    );
                     Err(StatusCode::BAD_REQUEST)
                 }
             },
             Err(_) => {
-                log("server", format!("Error: Bad request {:?}", &req));
+                log(
+                    LogFileType::Server,
+                    format!("Error: Bad request {:?}", &req),
+                );
                 Err(StatusCode::BAD_REQUEST)
             }
         }
@@ -267,7 +285,10 @@ mod not_safe {
         let body = match fs::read(format!("src{path}")) {
             Ok(bytes) => bytes,
             Err(_) => {
-                log("server", format!("Error: Failed to read body {:?}", &req));
+                log(
+                    LogFileType::Server,
+                    format!("Error: Failed to read body {:?}", &req),
+                );
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         };
@@ -283,7 +304,10 @@ mod not_safe {
             Err(_) => match fs::remove_dir_all(path) {
                 Ok(_) => Ok(resp),
                 Err(_) => {
-                    log("server", format!("Error: Bad request {:?}", &req));
+                    log(
+                        LogFileType::Server,
+                        format!("Error: Bad request {:?}", &req),
+                    );
                     Err(StatusCode::BAD_REQUEST)
                 }
             },

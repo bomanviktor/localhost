@@ -123,12 +123,16 @@ pub mod redirections {
 
 pub mod errors {
     use super::*;
+    use crate::log::*;
     use http::header::{CONTENT_LENGTH, HOST, SERVER};
 
     pub fn error(code: StatusCode, config: &ServerConfig) -> Response<Bytes> {
         let error_body = match check_errors(code, config) {
             Ok(b) => b,
-            Err(_) => to_bytes(&format!("{code}")),
+            Err(_) => {
+                log(LogFileType::Server, format!("Error: {}", code));
+                to_bytes(&format!("{code}"))
+            }
         };
 
         Response::builder()

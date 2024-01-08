@@ -1,11 +1,14 @@
-use crate::log::log;
+use crate::log::*;
 use crate::server::{Request, Route, ServerConfig, StatusCode};
 
 pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>, StatusCode> {
     let version = match version::get_version(req_str) {
         Ok(v) => v,
         Err(v) => {
-            log("server", format!("Error: Incorrect version '{}'", v));
+            log(
+                LogFileType::Server,
+                format!("Error: Incorrect version '{}'", v),
+            );
             return Err(StatusCode::HTTP_VERSION_NOT_SUPPORTED);
         }
     };
@@ -15,7 +18,7 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
         Ok(method) => method,
         Err(method) => {
             log(
-                "server",
+                LogFileType::Server,
                 format!("Error: Method not allowed '{}' on path '{}'", method, path),
             );
             return Err(StatusCode::METHOD_NOT_ALLOWED);
@@ -34,7 +37,10 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
     match request.body(body) {
         Ok(request) => Ok(request),
         Err(request) => {
-            log("server", format!("Error: Failed to get body {}", request));
+            log(
+                LogFileType::Server,
+                format!("Error: Failed to get body {}", request),
+            );
             Err(StatusCode::BAD_REQUEST)
         }
     }
@@ -78,7 +84,7 @@ pub mod path {
 }
 
 pub mod version {
-    use crate::log::log;
+    use crate::log::*;
     use http::{StatusCode, Version};
 
     pub fn get_version(req: &str) -> Result<Version, StatusCode> {
@@ -95,7 +101,7 @@ pub mod version {
             "HTTP/3.0" => Ok(Version::HTTP_3),
             _ => {
                 log(
-                    "server",
+                    LogFileType::Server,
                     format!("Error: Version not supported {}", version_str),
                 );
                 Err(StatusCode::HTTP_VERSION_NOT_SUPPORTED)
