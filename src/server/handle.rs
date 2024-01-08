@@ -1,15 +1,21 @@
+use std::fs;
+
 use crate::log;
 use crate::log::*;
 use crate::server::errors::error;
 use crate::server::handle_method;
 use crate::server::redirections::redirect;
 use crate::server::*;
+use crate::server_config::route::Settings;
+use http::header::CONTENT_TYPE;
 
 pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Result<()> {
     let mut buffer = [0; 10024];
 
+    // Read from stream
     let bytes_read = stream.read(&mut buffer)?;
 
+    // Parse the request
     let request_string = match String::from_utf8(buffer[..bytes_read].to_vec()) {
         Ok(request_str) => request_str,
         Err(e) => {
@@ -21,6 +27,7 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
         }
     };
 
+    // Match the request with a route
     let request = match get_request(config, &request_string) {
         Ok(req) => req,
         Err(e) => {
@@ -40,18 +47,30 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
         }
     };
 
-    if route.handler.is_some() {
-        let handler = route.handler.unwrap();
+    // Handle the request
+    if let Some(handler) = route.handler {
         return match handler(&request, config) {
             Ok(response) => serve_response(stream, response),
             Err(code) => {
                 log!(LogFileType::Server, format!("Error: {}", &code));
                 serve_response(stream, error(code, config))
             }
-        };
-    }
-
-    if route.settings.is_some() && is_cgi_request(&request.uri().to_string()) {
+        }
+    } else if route.settings.as_ref().map_or(false, |s| s.list_directory) {
+        let path = route.settings.as_ref().unwrap().format_path(&request.uri().path());
+        println!("Computed path for directory listing: {}", path);
+        if std::path::Path::new(&path).is_dir() {
+            println!("Confirmed directory. Proceeding to list contents.");
+            return serve_directory_contents(stream, &path, &route.settings.unwrap());
+        } else {
+            println!("Path is not a directory.");
+        }
+        fs::read_dir(path.clone()).map_err(|_| io::Error::new(io::ErrorKind::NotFound, "Directory not found"))?;
+        if std::path::Path::new(&path).is_dir() {
+            println!("is dir");
+            return serve_directory_contents(stream, &path, &route.settings.unwrap());
+        }
+    } else if route.settings.is_some() && is_cgi_request(&request.uri().to_string()) {
         match execute_cgi_script(&request_string, config, &route.settings.unwrap()) {
             Ok(resp) => {
                 stream.write_all(&resp).unwrap();
@@ -65,6 +84,7 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
         return Ok(());
     }
 
+    // Handle based on HTTP method
     match handle_method(&route, &request, config) {
         Ok(response) => serve_response(stream, response)?,
         Err(code) => {
@@ -80,4 +100,25 @@ pub fn serve_response(stream: &mut TcpStream, response: Response<Bytes>) -> io::
         stream.write_all(&format_response(response))?;
     }
     stream.flush()
+}
+
+fn serve_directory_contents(stream: &mut TcpStream, path: &str, settings: &Settings) -> io::Result<()> {
+    println!("Path: {}", path);
+    let entries = fs::read_dir(path)
+        .map_err(|_| io::Error::new(io::ErrorKind::NotFound, "Directory not found"))?
+        .map(|res| res.map(|e| e.file_name().into_string().unwrap_or_default()))
+        .collect::<Result<Vec<_>, io::Error>>()?;
+
+    let body = format!("<html><body><ul>{}</ul></body></html>",
+        entries.into_iter()
+        .map(|entry| format!("<li>{}</li>", entry))
+        .collect::<String>());
+
+    let response = Response::builder()
+        .status(StatusCode::OK)
+        .header(CONTENT_TYPE, "text/html")
+        .body(body.as_bytes().to_vec())
+        .unwrap();
+
+    serve_response(stream, response)
 }
