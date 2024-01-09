@@ -46,7 +46,13 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
     let body = if headers::is_chunked(request_builder.headers_ref()) {
         match get_chunked_body(body_str, conf.body_size_limit) {
             Ok(body) => body,
-            Err(status) => return Err(status),
+            Err(status) => {
+                log!(
+                    LogFileType::Server,
+                    format!("Error: Failed to get chunked body {}", status)
+                );
+                return Err(status);
+            }
         }
     } else {
         body::get_body(req_str, conf.body_size_limit).unwrap_or_default()
@@ -74,7 +80,13 @@ fn get_chunked_body(body_str: &str, limit: usize) -> Result<String, StatusCode> 
             // Parse the chunk size
             let chunk_size = match usize::from_str_radix(size_str.trim(), 16) {
                 Ok(size) => size,
-                Err(_) => return Err(StatusCode::BAD_REQUEST),
+                Err(size) => {
+                    log!(
+                        LogFileType::Server,
+                        format!("Error: Failed to get chunk size {}", size)
+                    );
+                    return Err(StatusCode::BAD_REQUEST);
+                }
             };
 
             // Check for the end of the chunked body
@@ -84,6 +96,10 @@ fn get_chunked_body(body_str: &str, limit: usize) -> Result<String, StatusCode> 
 
             // Ensure there's enough data for the chunk
             if rest.len() < chunk_size {
+                log!(
+                    LogFileType::Server,
+                    format!("Error: Not enough data for chunk {}", rest.len())
+                );
                 return Err(StatusCode::BAD_REQUEST);
             }
 
@@ -93,12 +109,20 @@ fn get_chunked_body(body_str: &str, limit: usize) -> Result<String, StatusCode> 
 
             // Check body size limit
             if body.len() > limit {
+                log!(
+                    LogFileType::Server,
+                    format!("Error: body too long {}", body.len())
+                );
                 return Err(StatusCode::PAYLOAD_TOO_LARGE);
             }
 
             // Prepare for the next iteration, skip past the chunk data and CRLF
             remaining_str = &after_chunk[2..]; // Assumes CRLF is always present
         } else {
+            log!(
+                LogFileType::Server,
+                "Error: Missing CRLF after chunk size".to_string()
+            );
             return Err(StatusCode::BAD_REQUEST); // Missing CRLF after chunk size
         }
     }
