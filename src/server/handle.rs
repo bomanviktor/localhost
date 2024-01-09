@@ -1,3 +1,4 @@
+use crate::log;
 use crate::log::*;
 use crate::server::errors::error;
 use crate::server::handle_method;
@@ -12,9 +13,9 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
     let request_string = match String::from_utf8(buffer[..bytes_read].to_vec()) {
         Ok(request_str) => request_str,
         Err(e) => {
-            log(
+            log!(
                 LogFileType::Server,
-                format!("Error reading from buffer to string: {e}"),
+                format!("Error reading from buffer to string: {e}")
             );
             return Ok(());
         }
@@ -23,7 +24,7 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
     let request = match get_request(config, &request_string) {
         Ok(req) => req,
         Err(e) => {
-            log(LogFileType::Server, format!("Error: {}", e));
+            log!(LogFileType::Server, format!("Error: {}", e));
             return serve_response(stream, error(e, config));
         }
     };
@@ -34,7 +35,7 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
             return serve_response(stream, redirect(code, config, request.version(), path));
         }
         Err((code, _)) => {
-            log(LogFileType::Server, format!("Error: {}", &code));
+            log!(LogFileType::Server, format!("Error: {}", &code));
             return serve_response(stream, error(code, config));
         }
     };
@@ -44,7 +45,7 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
         return match handler(&request, config) {
             Ok(response) => serve_response(stream, response),
             Err(code) => {
-                log(LogFileType::Server, format!("Error: {}", &code));
+                log!(LogFileType::Server, format!("Error: {}", &code));
                 serve_response(stream, error(code, config))
             }
         };
@@ -57,7 +58,7 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
                 stream.flush().expect("could not flush");
             }
             Err(code) => {
-                log(LogFileType::Server, format!("Error: {}", &code));
+                log!(LogFileType::Server, format!("Error: {}", &code));
                 return serve_response(stream, error(code, config));
             }
         }
@@ -67,7 +68,7 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
     match handle_method(&route, &request, config) {
         Ok(response) => serve_response(stream, response)?,
         Err(code) => {
-            log(LogFileType::Server, format!("Error: {}", &code));
+            log!(LogFileType::Server, format!("Error: {}", &code));
             serve_response(stream, error(code, config))?
         }
     }

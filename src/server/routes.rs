@@ -1,4 +1,5 @@
-use crate::log::*;
+use crate::log;
+use crate::log::LogFileType;
 use crate::server::method_is_allowed;
 use crate::server::path::path_exists;
 use crate::server::redirections::is_redirect;
@@ -17,17 +18,17 @@ pub fn get_route<'a>(
         route = config.routes[i].clone();
         routed_path = path;
     } else {
-        log(
+        log!(
             LogFileType::Server,
-            format!("Error: Path not found {}", url_path),
+            format!("Error: Path not found {}", url_path)
         );
         return Err((StatusCode::NOT_FOUND, "".to_string()));
     }
 
     if is_redirect(url_path, routed_path) {
-        log(
+        log!(
             LogFileType::Server,
-            format!("Error: Path not redirect: {} != {}", url_path, routed_path),
+            format!("Error: Path not redirect: {} != {}", url_path, routed_path)
         );
         return Err((
             route.settings.unwrap().redirect_status_code,
@@ -37,13 +38,13 @@ pub fn get_route<'a>(
 
     // Check if the method is allowed on route
     if !method_is_allowed(req.method(), &route) {
-        log(
+        log!(
             LogFileType::Server,
             format!(
                 "Error: Method '{}' not allowed on path '{}'",
                 req.method(),
                 url_path
-            ),
+            )
         );
 
         return Err((StatusCode::METHOD_NOT_ALLOWED, "".to_string()));

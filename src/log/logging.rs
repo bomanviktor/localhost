@@ -38,22 +38,22 @@ pub fn init_logs() {
     }
 }
 
-// Usage example
-// log("server", "This is a test log message");
-// log("client", "This is a test log message");
-pub fn log(file_type: LogFileType, log_message: String) {
+pub fn log_with_file_line(
+    file_type: LogFileType,
+    log_message: String,
+    file_source: &str,
+    line_number: u32,
+) {
     if log_message.is_empty() {
         return;
     }
+
     let log_file = file_type.file_path();
 
     let mut message = String::new();
-    let line = line!();
-    let file_source = file!();
-
     let now = Local::now();
     write!(message, "[{}]", now.format("%d/%m/%y %H:%M:%S")).unwrap();
-    write!(message, "[{}:{}] ", file_source, line).unwrap();
+    write!(message, "[{}:{}] ", file_source, line_number).unwrap();
     writeln!(message, "{}", log_message).unwrap();
 
     let mut file = OpenOptions::new()
@@ -63,4 +63,15 @@ pub fn log(file_type: LogFileType, log_message: String) {
         .expect("Unable to open file");
     file.write_all(message.as_bytes())
         .expect("Unable to write to file");
+}
+
+// Macro to simplify logging
+// Usage example
+// log!(LogFileType::Server, "This is a test log message");
+// log!(LogFileType::Client, "This is a test log message");
+#[macro_export]
+macro_rules! log {
+    ($file_type:expr, $log_message:expr) => {
+        $crate::log::log_with_file_line($file_type, $log_message, file!(), line!())
+    };
 }

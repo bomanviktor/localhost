@@ -1,4 +1,5 @@
 use super::{Bytes, Method, Request, Response, Route, ServerConfig, StatusCode};
+use crate::log;
 use crate::log::*;
 use crate::server::content_type;
 use crate::server::utils::{get_line, get_split_index};
@@ -45,9 +46,9 @@ pub fn handle_method(
         Method::CONNECT => unimplemented!(),
         _ => {
             return {
-                log(
+                log!(
                     LogFileType::Server,
-                    format!("Error: Bad Request {:?}", &req),
+                    format!("Error: Bad Request {:?}", &req)
                 );
                 Err(StatusCode::BAD_REQUEST)
             }
@@ -66,9 +67,9 @@ mod safe {
         let body = match fs::read(format!("src{path}")) {
             Ok(bytes) => bytes,
             Err(_) => {
-                log(
+                log!(
                     LogFileType::Server,
-                    format!("Error: Path does not exist {}", &path),
+                    format!("Error: Path does not exist {}", &path)
                 );
                 return Err(StatusCode::NOT_FOUND);
             }
@@ -94,9 +95,9 @@ mod safe {
         let metadata = match fs::metadata(format!("src{path}")) {
             Ok(metadata) => metadata,
             Err(_) => {
-                log(
+                log!(
                     LogFileType::Server,
-                    format!("Error: Could not get head for path '{}'", path),
+                    format!("Error: Could not get head for path '{}'", path)
                 );
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
@@ -218,9 +219,9 @@ mod not_safe {
         match fs::write(&path, body) {
             Ok(_) => Ok(resp),
             Err(_) => {
-                log(
+                log!(
                     LogFileType::Server,
-                    format!("Error: Bad request {:?}", &req),
+                    format!("Error: Bad request {:?}", &req)
                 );
                 Err(StatusCode::BAD_REQUEST)
             }
@@ -240,9 +241,9 @@ mod not_safe {
         match fs::write(path, bytes) {
             Ok(_) => Ok(resp),
             Err(_) => {
-                log(
+                log!(
                     LogFileType::Server,
-                    format!("Error: Bad request {:?}", &req),
+                    format!("Error: Bad request {:?}", &req)
                 );
                 Err(StatusCode::BAD_REQUEST)
             }
@@ -263,17 +264,17 @@ mod not_safe {
             Ok(_) => match fs::write(path, bytes) {
                 Ok(_) => Ok(resp),
                 Err(_) => {
-                    log(
+                    log!(
                         LogFileType::Server,
-                        format!("Error: Bad request {:?}", &req),
+                        format!("Error: Bad request {:?}", &req)
                     );
                     Err(StatusCode::BAD_REQUEST)
                 }
             },
             Err(_) => {
-                log(
+                log!(
                     LogFileType::Server,
-                    format!("Error: Bad request {:?}", &req),
+                    format!("Error: Bad request {:?}", &req)
                 );
                 Err(StatusCode::BAD_REQUEST)
             }
@@ -285,9 +286,9 @@ mod not_safe {
         let body = match fs::read(format!("src{path}")) {
             Ok(bytes) => bytes,
             Err(_) => {
-                log(
+                log!(
                     LogFileType::Server,
-                    format!("Error: Failed to read body {:?}", &req),
+                    format!("Error: Failed to read body {:?}", &req)
                 );
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
@@ -304,9 +305,9 @@ mod not_safe {
             Err(_) => match fs::remove_dir_all(path) {
                 Ok(_) => Ok(resp),
                 Err(_) => {
-                    log(
+                    log!(
                         LogFileType::Server,
-                        format!("Error: Bad request {:?}", &req),
+                        format!("Error: Bad request {:?}", &req)
                     );
                     Err(StatusCode::BAD_REQUEST)
                 }

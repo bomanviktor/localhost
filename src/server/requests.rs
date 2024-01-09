@@ -1,3 +1,4 @@
+use crate::log;
 use crate::log::*;
 use crate::server::{Request, Route, ServerConfig, StatusCode};
 
@@ -5,9 +6,9 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
     let version = match version::get_version(req_str) {
         Ok(v) => v,
         Err(v) => {
-            log(
+            log!(
                 LogFileType::Server,
-                format!("Error: Incorrect version '{}'", v),
+                format!("Error: Incorrect version '{}'", v)
             );
             return Err(StatusCode::HTTP_VERSION_NOT_SUPPORTED);
         }
@@ -17,9 +18,9 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
     let method = match super::get_method(req_str) {
         Ok(method) => method,
         Err(method) => {
-            log(
+            log!(
                 LogFileType::Server,
-                format!("Error: Method not allowed '{}' on path '{}'", method, path),
+                format!("Error: Method not allowed '{}' on path '{}'", method, path)
             );
             return Err(StatusCode::METHOD_NOT_ALLOWED);
         }
@@ -37,9 +38,9 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
     match request.body(body) {
         Ok(request) => Ok(request),
         Err(request) => {
-            log(
+            log!(
                 LogFileType::Server,
-                format!("Error: Failed to get body {}", request),
+                format!("Error: Failed to get body {}", request)
             );
             Err(StatusCode::BAD_REQUEST)
         }
@@ -84,6 +85,7 @@ pub mod path {
 }
 
 pub mod version {
+    use crate::log;
     use crate::log::*;
     use http::{StatusCode, Version};
 
@@ -100,9 +102,9 @@ pub mod version {
             "HTTP/2.0" => Ok(Version::HTTP_2),
             "HTTP/3.0" => Ok(Version::HTTP_3),
             _ => {
-                log(
+                log!(
                     LogFileType::Server,
-                    format!("Error: Version not supported {}", version_str),
+                    format!("Error: Version not supported {}", version_str)
                 );
                 Err(StatusCode::HTTP_VERSION_NOT_SUPPORTED)
             }

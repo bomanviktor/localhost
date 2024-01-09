@@ -1,3 +1,4 @@
+use crate::log;
 use crate::log::*;
 use crate::server_config::ServerConfig;
 use crate::type_aliases::Bytes;
@@ -28,9 +29,9 @@ pub fn update_cookie(
         {
             Ok(resp) => Ok(resp),
             Err(_) => {
-                log(
+                log!(
                     LogFileType::Server,
-                    "Error: Failed to remove cookie".to_string(),
+                    "Error: Failed to remove cookie".to_string()
                 ); //ToDo:format with cookie value
                 Err(StatusCode::INTERNAL_SERVER_ERROR)
             }
@@ -48,9 +49,9 @@ pub fn update_cookie(
     {
         Ok(resp) => Ok(resp),
         Err(_) => {
-            log(
+            log!(
                 LogFileType::Server,
-                "Error: Failed to set cookie".to_string(),
+                "Error: Failed to set cookie".to_string()
             ); //ToDo:format with cookie value
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
@@ -65,16 +66,16 @@ pub fn validate_cookie(
         // Replace this with a database value.
         Some(c) => c.to_str().unwrap_or_default(),
         None => {
-            log(
+            log!(
                 LogFileType::Server,
-                "Error: Failed to get cookie".to_string(),
+                "Error: Failed to get cookie".to_string()
             ); //ToDo:format with cookie value
             return Err(StatusCode::UNAUTHORIZED);
         }
     };
 
     if value.is_empty() {
-        log(LogFileType::Server, "Error: cookie value empty".to_string()); //ToDo:format with cookie value
+        log!(LogFileType::Server, "Error: cookie value empty".to_string()); //ToDo:format with cookie value
         return Err(StatusCode::UNAUTHORIZED);
     }
 
@@ -89,9 +90,9 @@ pub fn validate_cookie(
     {
         Ok(resp) => Ok(resp),
         Err(_) => {
-            log(
+            log!(
                 LogFileType::Server,
-                "Error: Failed to validate cookie".to_string(),
+                "Error: Failed to validate cookie".to_string()
             ); //ToDo:format with cookie value
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
