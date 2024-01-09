@@ -10,20 +10,23 @@ pub enum LogFileType {
     Client,
 }
 
+const LOG_DIR: &str = "./src/log/log_files/";
+
 impl LogFileType {
-    fn file_path(&self) -> &'static str {
+    fn file_path(&self) -> String {
         match self {
-            LogFileType::Server => "./src/log/log_files/server.log",
-            LogFileType::Client => "./src/log/log_files/client.log",
+            LogFileType::Server => format!("{LOG_DIR}server.log"),
+            LogFileType::Client => format!("{LOG_DIR}client.log"),
         }
     }
 }
-pub fn rename_server_and_client_logs() {
+pub fn init_logs() {
+    let _ = fs::create_dir(LOG_DIR);
     let files = [LogFileType::Server, LogFileType::Client];
 
     for file_type in &files {
         let file_path = file_type.file_path();
-        let path = Path::new(file_path);
+        let path = Path::new(&file_path);
 
         if path.exists() {
             let now = Local::now();
@@ -42,7 +45,6 @@ pub fn log(file_type: LogFileType, log_message: String) {
     if log_message.is_empty() {
         return;
     }
-
     let log_file = file_type.file_path();
 
     let mut message = String::new();

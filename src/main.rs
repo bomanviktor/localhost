@@ -1,7 +1,7 @@
-use localhost::log::rename_server_and_client_logs;
+use localhost::log::init_logs;
 use localhost::server::{servers, start};
 
 fn main() {
-    rename_server_and_client_logs();
+    init_logs();
     start(servers());
 }
