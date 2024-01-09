@@ -12,19 +12,25 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
         Err(_) => return Err(StatusCode::METHOD_NOT_ALLOWED),
     };
 
-    let headers = headers::get_headers(req_str);
-    let is_chunked = headers.iter().any(|header| {
-        let parts: Vec<&str> = header.splitn(2, ": ").collect();
-        parts.len() == 2
-            && parts[0].eq_ignore_ascii_case("transfer-encoding")
-            && parts[1].contains("chunked")
-    });
+    // Constructing the request with parsed headers and body
+    let mut request_builder = http::Request::builder()
+        .method(method)
+        .uri(path)
+        .version(version);
 
+    for header in headers::get_headers(req_str) {
+        if let Some((key, value)) = headers::format_header(header) {
+            request_builder =
+                request_builder.header(key.to_ascii_lowercase(), value.to_ascii_lowercase());
+        }
+    }
+
+    // Decapitate the request
     let body_start_index = req_str.find("\r\n\r\n").unwrap_or(req_str.len());
     let body_str = &req_str[body_start_index + 4..]; // "+ 4" to skip past "\r\n\r\n"
 
-    let body = if is_chunked {
-        match handle_chunked_body(body_str, conf.body_size_limit) {
+    let body = if headers::is_chunked(request_builder.headers_ref()) {
+        match get_chunked_body(body_str, conf.body_size_limit) {
             Ok(body) => body,
             Err(status) => return Err(status),
         }
@@ -32,25 +38,13 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
         body::get_body(req_str, conf.body_size_limit).unwrap_or_default()
     };
 
-    // Constructing the request with parsed headers and body
-    let mut request_builder = http::Request::builder()
-        .method(method)
-        .uri(path)
-        .version(version);
-
-    for header in headers {
-        if let Some((key, value)) = headers::format_header(header) {
-            request_builder = request_builder.header(key, value);
-        }
-    }
-
     match request_builder.body(body) {
         Ok(request) => Ok(request),
         Err(_) => Err(StatusCode::BAD_REQUEST),
     }
 }
 
-fn handle_chunked_body(body_str: &str, limit: usize) -> Result<String, StatusCode> {
+fn get_chunked_body(body_str: &str, limit: usize) -> Result<String, StatusCode> {
     let mut body = String::new();
     let mut remaining_str = body_str;
 
@@ -75,8 +69,6 @@ fn handle_chunked_body(body_str: &str, limit: usize) -> Result<String, StatusCod
 
             // Extract the chunk data
             let (chunk_data, after_chunk) = rest.split_at(chunk_size);
-            println!("Chunk data: {}", chunk_data);
-            println!("After chunk: {}", after_chunk);
             body.push_str(chunk_data);
 
             // Check body size limit
@@ -152,6 +144,9 @@ pub mod version {
 }
 
 pub mod headers {
+    use http::header::TRANSFER_ENCODING;
+    use http::HeaderMap;
+
     pub fn get_headers(req: &str) -> Vec<&str> {
         // Remove the body from the request
         let head = req
@@ -164,6 +159,18 @@ pub mod headers {
             .split("\r\n")
             .filter(|line| !line.contains("HTTP/"))
             .collect::<Vec<&str>>()
+    }
+
+    pub fn is_chunked(headers: Option<&HeaderMap>) -> bool {
+        if headers.is_none() {
+            return false;
+        }
+
+        if let Some(header) = headers.unwrap().get(TRANSFER_ENCODING) {
+            header.to_str().unwrap() == "chunked"
+        } else {
+            false
+        }
     }
 
     pub fn format_header(header: &str) -> Option<(&str, &str)> {

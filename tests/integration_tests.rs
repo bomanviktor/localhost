@@ -38,7 +38,7 @@ mod chunked_encoding {
         request_builder = request_builder
             .header(CONTENT_TYPE, "text/plain")
             .header(TRANSFER_ENCODING, "chunked")
-            .body(body.clone());
+            .body(body);
 
         let response = request_builder.send().unwrap();
         response
@@ -72,7 +72,7 @@ mod chunked_encoding {
 
             // Check the response status and body
             assert_eq!(response.status(), reqwest::StatusCode::OK);
-            assert_eq!(response.bytes().unwrap_or_default(), body.as_bytes());
+            assert_eq!(response.bytes().unwrap_or_default(), body);
         }
 
         #[test]
