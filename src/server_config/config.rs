@@ -30,7 +30,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 settings: Some(Settings {
                     http_redirections: vec![],
                     redirect_status_code: http::StatusCode::MOVED_PERMANENTLY,
-                    root_path: Some("./root"),
+                    root_path: Some("./rootqweeqw"),
                     default_if_url_is_dir: "index.html",
                     default_if_request_is_dir: "index.html",
                     cgi_def: HashMap::new(),
@@ -38,16 +38,16 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 }),
             },
             Route {
-                path: "/dir",
+                path: "/root/files", // this is does not allow files/* to be accessed
                 methods: vec![http::Method::GET],
                 handler: None,
                 //test directory listing
                 settings: Some(Settings {
                     http_redirections: vec![],
                     redirect_status_code: http::StatusCode::MOVED_PERMANENTLY,
-                    root_path: Some("./root"),
-                    default_if_url_is_dir: "index.html",
-                    default_if_request_is_dir: "index.html",
+                    root_path: Some("./root123"), // not really working yet
+                    default_if_url_is_dir: "index.html", //WIP
+                    default_if_request_is_dir: "index.html", //WIP
                     cgi_def: HashMap::new(),
                     list_directory: true,
                 }),

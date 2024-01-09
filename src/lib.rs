@@ -57,8 +57,6 @@ pub mod server_config {
                     format!("src{}", path)
                 }
             }
-
-
         }
     }
 }

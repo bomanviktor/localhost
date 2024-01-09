@@ -57,7 +57,27 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
             }
         }
     } else if route.settings.as_ref().map_or(false, |s| s.list_directory) {
-        let path = route.settings.as_ref().unwrap().format_path(&request.uri().path());
+        let current_dir = std::env::current_dir()?;
+
+        println!("Current directory: {:?}", current_dir);
+
+        // Read the contents of the directory
+        let entries = fs::read_dir(current_dir)?;
+
+        for entry in entries {
+            let entry = entry?;
+            let path = entry.path();
+
+            // Print the path
+            if path.is_dir() {
+                println!("Directory: {:?}", path);
+            } else {
+                println!("File: {:?}", path);
+            }
+        }
+
+        let path = format!("./src{}/", request.uri().path());
+
         println!("Computed path for directory listing: {}", path);
         if std::path::Path::new(&path).is_dir() {
             println!("Confirmed directory. Proceeding to list contents.");
@@ -65,7 +85,8 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
         } else {
             println!("Path is not a directory.");
         }
-        fs::read_dir(path.clone()).map_err(|_| io::Error::new(io::ErrorKind::NotFound, "Directory not found"))?;
+        fs::read_dir(path.clone())
+            .map_err(|_| io::Error::new(io::ErrorKind::NotFound, "Directory not found"))?;
         if std::path::Path::new(&path).is_dir() {
             println!("is dir");
             return serve_directory_contents(stream, &path, &route.settings.unwrap());
@@ -102,18 +123,22 @@ pub fn serve_response(stream: &mut TcpStream, response: Response<Bytes>) -> io::
     stream.flush()
 }
 
-fn serve_directory_contents(stream: &mut TcpStream, path: &str, settings: &Settings) -> io::Result<()> {
+fn serve_directory_contents(
+    stream: &mut TcpStream,
+    path: &str,
+    _settings: &Settings,
+) -> io::Result<()> {
     println!("Path: {}", path);
     let entries = fs::read_dir(path)
         .map_err(|_| io::Error::new(io::ErrorKind::NotFound, "Directory not found"))?
         .map(|res| res.map(|e| e.file_name().into_string().unwrap_or_default()))
         .collect::<Result<Vec<_>, io::Error>>()?;
 
-    let body = format!("<html><body><ul>{}</ul></body></html>",
-        entries.into_iter()
-        .map(|entry| format!("<li>{}</li>", entry))
-        .collect::<String>());
-
+    let body = format!(
+        "<html><body><ul>{}</ul></body></html>",
+        entries.into_iter().fold(String::new(), |acc, entry| acc
+            + &format!("<li>{}</li>", entry))
+    );
     let response = Response::builder()
         .status(StatusCode::OK)
         .header(CONTENT_TYPE, "text/html")
