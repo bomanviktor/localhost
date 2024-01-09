@@ -4,7 +4,7 @@ use crate::server::redirections::redirect;
 use crate::server::*;
 
 pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Result<()> {
-    let mut buffer = [0; 1024];
+    let mut buffer = [0; 10024];
 
     let bytes_read = stream.read(&mut buffer)?;
 

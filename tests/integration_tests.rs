@@ -1,3 +1,8 @@
+const HOST: &str = "http://127.0.0.1:8080";
+use common::setup;
+use reqwest;
+use std::thread;
+
 mod common;
 mod test_config {
     use localhost::server_config::server_config;
@@ -10,6 +15,68 @@ mod test_config {
             assert!(c.body_size_limit > 0);
             assert!(!c.routes.is_empty());
         }
+    }
+}
+
+mod chunked_encoding {
+    use super::*;
+    use reqwest::blocking::Client;
+    use reqwest::header::{CONTENT_TYPE, TRANSFER_ENCODING};
+
+    fn send_chunked_request(
+        client: &Client,
+        url: &str,
+        body: &'static str,
+        method: http::Method,
+    ) -> reqwest::blocking::Response {
+        let mut request_builder = match method {
+            http::Method::POST => client.post(url),
+            http::Method::GET => client.get(url),
+            _ => client.get(url),
+        };
+
+        request_builder = request_builder
+            .header(CONTENT_TYPE, "text/plain")
+            .header(TRANSFER_ENCODING, "chunked")
+            .body(body.clone());
+
+        let response = request_builder.send().unwrap();
+        response
+    }
+
+    mod get {
+        #[test]
+        fn valid() {}
+
+        #[test]
+        fn invalid() {}
+    }
+
+    mod post {
+        use super::*;
+        #[test]
+        fn valid() {
+            thread::spawn(setup);
+
+            let body = "Wiki\r\npedia\r\n in\r\n\r\nchunks.\r\n\r\n";
+
+            let client = Client::new();
+            let valid_endpoint = "/test";
+
+            let response = send_chunked_request(
+                &client,
+                &format!("{HOST}{valid_endpoint}"),
+                body,
+                http::Method::POST,
+            );
+
+            // Check the response status and body
+            assert_eq!(response.status(), reqwest::StatusCode::OK);
+            assert_eq!(response.bytes().unwrap_or_default(), body.as_bytes());
+        }
+
+        #[test]
+        fn invalid() {}
     }
 }
 
@@ -26,45 +93,4 @@ mod test_requests {
             StatusCode::from_str(status).unwrap_or(StatusCode::OK)
         }
     }
-    /*
-    mod valid {
-        use super::*;
-        #[test]
-        fn test_get() {
-            thread::spawn(setup);
-            // Request 1
-            let mut easy = Easy::new();
-            easy.url("localhost:8080/path1").unwrap();
-            easy.get(true).unwrap();
-            // Set a closure to handle the response
-            easy.header_function(|header| {
-                // Process each header line (here, we print it to stdout)
-                let header = String::from_utf8(header.to_vec()).unwrap_or_default();
-                if header.contains("HTTP/1.1") {
-                    assert_eq!(get_status(&header), StatusCode::OK);
-                }
-                true
-            })
-            .unwrap();
-            easy.perform().unwrap_or_default();
-
-            // Request 2
-            let mut easy = Easy::new();
-            easy.url("localhost:8080/path2").unwrap();
-            easy.get(true).unwrap();
-            // Set a closure to handle the response
-            easy.header_function(|header| {
-                // Process each header line (here, we print it to stdout)
-                let header = String::from_utf8(header.to_vec()).unwrap_or_default();
-                if header.contains("HTTP/1.1") {
-                    assert_eq!(get_status(&header), StatusCode::OK);
-                }
-                true
-            })
-            .unwrap();
-            easy.perform().unwrap_or_default();
-
-        }
-    }
-             */
 }
