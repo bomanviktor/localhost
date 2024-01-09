@@ -4,7 +4,10 @@ use super::{
 
 use crate::log::*;
 use std::io::ErrorKind;
+#[cfg(unix)]
 use std::os::fd::{AsRawFd, FromRawFd};
+#[cfg(windows)]
+use std::os::windows::io::{AsRawSocket, FromRawSocket};
 use std::time::Duration;
 
 pub type Connection<'a> = (TcpStream, Arc<ServerConfig<'a>>);
@@ -135,7 +138,11 @@ use socket2::{SockRef, Socket};
 
 // Function to set linger option on a mio TcpStream
 fn set_linger_option(stream: &TcpStream, linger_duration: Option<Duration>) -> std::io::Result<()> {
+    #[cfg(unix)]
     let socket = unsafe { Socket::from_raw_fd(stream.as_raw_fd()) };
+    #[cfg(windows)]
+    let socket = unsafe { Socket::from_raw_socket(stream.as_raw_socket()) };
+
     SockRef::from(&socket).set_linger(linger_duration)?;
     std::mem::forget(socket); // Important to avoid closing the file descriptor
     Ok(())

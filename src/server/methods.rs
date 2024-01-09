@@ -59,6 +59,14 @@ pub fn handle_method(
 
 mod safe {
     use super::*;
+    use http::header::{TRANSFER_ENCODING, VIA};
+    use http::HeaderName;
+
+    /// # STANDARD_HEADERS
+    ///
+    /// Make sure you adjust this to get the desired behaviour for get requests.
+    /// TODO: Move this to a function.
+    const STANDARD_HEADERS: [HeaderName; 1] = [TRANSFER_ENCODING];
     pub fn get(
         req: &Request<String>,
         config: &ServerConfig,
@@ -75,16 +83,23 @@ mod safe {
             }
         };
 
-        let resp = Response::builder()
+        let mut resp = Response::builder()
             .version(req.version())
             .header(HOST, config.host)
             .status(StatusCode::OK)
             .header(CONTENT_TYPE, content_type(path))
-            .header(CONTENT_LENGTH, body.len())
-            .body(body)
-            .unwrap();
+            .header(CONTENT_LENGTH, body.len());
 
-        Ok(resp)
+        for (key, value) in req.headers() {
+            if STANDARD_HEADERS.contains(key) {
+                resp = resp.header(key, value);
+            }
+        }
+
+        match resp.body(body) {
+            Ok(r) => Ok(r),
+            Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        }
     }
 
     pub fn head(
@@ -131,7 +146,7 @@ mod safe {
         }
 
         // Update the Via header
-        let existing_via = req.headers().get("Via").map(|v| v.to_str().unwrap_or(""));
+        let existing_via = req.headers().get(VIA).map(|v| v.to_str().unwrap_or(""));
 
         let via = if let Some(via_header) = existing_via {
             format!("{}, {}", via_header, config.host)

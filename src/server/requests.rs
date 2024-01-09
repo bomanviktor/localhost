@@ -26,16 +26,33 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
         }
     };
 
-    let mut request = Request::builder().method(method).uri(path).version(version);
+    // Constructing the request with parsed headers and body
+    let mut request_builder = http::Request::builder()
+        .method(method)
+        .uri(path)
+        .version(version);
 
     for header in headers::get_headers(req_str) {
         if let Some((key, value)) = headers::format_header(header) {
-            request = request.header(key, value);
+            request_builder =
+                request_builder.header(key.to_ascii_lowercase(), value.to_ascii_lowercase());
         }
     }
 
-    let body = body::get_body(req_str, conf.body_size_limit).unwrap_or_default();
-    match request.body(body) {
+    // Decapitate the request
+    let body_start_index = req_str.find("\r\n\r\n").unwrap_or(req_str.len());
+    let body_str = &req_str[body_start_index + 4..]; // "+ 4" to skip past "\r\n\r\n"
+
+    let body = if headers::is_chunked(request_builder.headers_ref()) {
+        match get_chunked_body(body_str, conf.body_size_limit) {
+            Ok(body) => body,
+            Err(status) => return Err(status),
+        }
+    } else {
+        body::get_body(req_str, conf.body_size_limit).unwrap_or_default()
+    };
+
+    match request_builder.body(body) {
         Ok(request) => Ok(request),
         Err(request) => {
             log!(
@@ -45,6 +62,48 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
             Err(StatusCode::BAD_REQUEST)
         }
     }
+}
+
+fn get_chunked_body(body_str: &str, limit: usize) -> Result<String, StatusCode> {
+    let mut body = String::new();
+    let mut remaining_str = body_str;
+
+    while !remaining_str.is_empty() {
+        // Split at the first occurrence of CRLF
+        if let Some((size_str, rest)) = remaining_str.split_once("\r\n") {
+            // Parse the chunk size
+            let chunk_size = match usize::from_str_radix(size_str.trim(), 16) {
+                Ok(size) => size,
+                Err(_) => return Err(StatusCode::BAD_REQUEST),
+            };
+
+            // Check for the end of the chunked body
+            if chunk_size == 0 {
+                break;
+            }
+
+            // Ensure there's enough data for the chunk
+            if rest.len() < chunk_size {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+
+            // Extract the chunk data
+            let (chunk_data, after_chunk) = rest.split_at(chunk_size);
+            body.push_str(chunk_data);
+
+            // Check body size limit
+            if body.len() > limit {
+                return Err(StatusCode::PAYLOAD_TOO_LARGE);
+            }
+
+            // Prepare for the next iteration, skip past the chunk data and CRLF
+            remaining_str = &after_chunk[2..]; // Assumes CRLF is always present
+        } else {
+            return Err(StatusCode::BAD_REQUEST); // Missing CRLF after chunk size
+        }
+    }
+
+    Ok(body)
 }
 
 pub mod path {
@@ -113,7 +172,8 @@ pub mod version {
 }
 
 pub mod headers {
-    use crate::server::utils::get_split_index;
+    use http::header::TRANSFER_ENCODING;
+    use http::HeaderMap;
 
     pub fn get_headers(req: &str) -> Vec<&str> {
         // Remove the body from the request
@@ -129,6 +189,18 @@ pub mod headers {
             .collect::<Vec<&str>>()
     }
 
+    pub fn is_chunked(headers: Option<&HeaderMap>) -> bool {
+        if headers.is_none() {
+            return false;
+        }
+
+        if let Some(header) = headers.unwrap().get(TRANSFER_ENCODING) {
+            header.to_str().unwrap() == "chunked"
+        } else {
+            false
+        }
+    }
+
     pub fn format_header(header: &str) -> Option<(&str, &str)> {
         let key_value = header
             .trim_end_matches('\0')
@@ -138,50 +210,6 @@ pub mod headers {
 
         if key_value.len() == 2 {
             Some((key_value[0], key_value[1]))
-        } else {
-            None
-        }
-    }
-
-    /// `set_cookies` takes care of the `Set-Cookie` header
-    pub fn set_cookies(req: &str) -> Option<Vec<&str>> {
-        let cookies = req
-            .split("\r\n")
-            .filter(|l| l.contains("Set-Cookie"))
-            .map(|cookie| get_split_index(cookie, 1)) // "Set-Cookie: foo_bar=baz" -> "foo_bar=baz"
-            .collect::<Vec<&str>>();
-
-        if !cookies.is_empty() {
-            Some(cookies)
-        } else {
-            None
-        }
-    }
-
-    /// `get_cookies` takes care of the `Cookie` header
-    pub fn get_cookies(req: &str) -> Option<Vec<&str>> {
-        if let Some(cookies) = req.split("\r\n").find(|line| line.contains("Cookie")) {
-            return Some(cookies.split(';').collect::<Vec<&str>>());
-        }
-        None
-    }
-
-    /// `get_content_type` gets the `Content-Length` header for state changing methods
-    pub fn get_content_length(req: &str) -> Option<&str> {
-        if let Some(line) = req.split("\r\n").find(|&l| l.contains("Content-Length")) {
-            let content_length = get_split_index(line, 1);
-            // "Content-Length: 1337" -> "1337"
-            return Some(content_length);
-        }
-        None
-    }
-
-    /// `get_content_type` gets the `Content-Type` header for state changing methods
-    pub fn get_content_type(req: &str) -> Option<&str> {
-        if let Some(line) = req.split('\n').find(|&l| l.contains("Content-Type")) {
-            let content_type = get_split_index(line, 1);
-            // "Content-Type: text/html" -> "text/html"
-            Some(content_type)
         } else {
             None
         }
