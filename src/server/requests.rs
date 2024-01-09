@@ -1,15 +1,29 @@
+use crate::log;
+use crate::log::*;
 use crate::server::{Request, Route, ServerConfig, StatusCode};
 
 pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>, StatusCode> {
     let version = match version::get_version(req_str) {
         Ok(v) => v,
-        Err(_) => return Err(StatusCode::HTTP_VERSION_NOT_SUPPORTED),
+        Err(v) => {
+            log!(
+                LogFileType::Server,
+                format!("Error: Incorrect version '{}'", v)
+            );
+            return Err(StatusCode::HTTP_VERSION_NOT_SUPPORTED);
+        }
     };
 
     let path = path::get_path(req_str);
     let method = match super::get_method(req_str) {
         Ok(method) => method,
-        Err(_) => return Err(StatusCode::METHOD_NOT_ALLOWED),
+        Err(method) => {
+            log!(
+                LogFileType::Server,
+                format!("Error: Method not allowed '{}' on path '{}'", method, path)
+            );
+            return Err(StatusCode::METHOD_NOT_ALLOWED);
+        }
     };
 
     // Constructing the request with parsed headers and body
@@ -32,7 +46,13 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
     let body = if headers::is_chunked(request_builder.headers_ref()) {
         match get_chunked_body(body_str, conf.body_size_limit) {
             Ok(body) => body,
-            Err(status) => return Err(status),
+            Err(status) => {
+                log!(
+                    LogFileType::Server,
+                    format!("Error: Failed to get chunked body {}", status)
+                );
+                return Err(status);
+            }
         }
     } else {
         body::get_body(req_str, conf.body_size_limit).unwrap_or_default()
@@ -40,7 +60,13 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
 
     match request_builder.body(body) {
         Ok(request) => Ok(request),
-        Err(_) => Err(StatusCode::BAD_REQUEST),
+        Err(request) => {
+            log!(
+                LogFileType::Server,
+                format!("Error: Failed to get body {}", request)
+            );
+            Err(StatusCode::BAD_REQUEST)
+        }
     }
 }
 
@@ -54,7 +80,13 @@ fn get_chunked_body(body_str: &str, limit: usize) -> Result<String, StatusCode> 
             // Parse the chunk size
             let chunk_size = match usize::from_str_radix(size_str.trim(), 16) {
                 Ok(size) => size,
-                Err(_) => return Err(StatusCode::BAD_REQUEST),
+                Err(size) => {
+                    log!(
+                        LogFileType::Server,
+                        format!("Error: Failed to get chunk size {}", size)
+                    );
+                    return Err(StatusCode::BAD_REQUEST);
+                }
             };
 
             // Check for the end of the chunked body
@@ -64,6 +96,10 @@ fn get_chunked_body(body_str: &str, limit: usize) -> Result<String, StatusCode> 
 
             // Ensure there's enough data for the chunk
             if rest.len() < chunk_size {
+                log!(
+                    LogFileType::Server,
+                    format!("Error: Not enough data for chunk {}", rest.len())
+                );
                 return Err(StatusCode::BAD_REQUEST);
             }
 
@@ -73,12 +109,20 @@ fn get_chunked_body(body_str: &str, limit: usize) -> Result<String, StatusCode> 
 
             // Check body size limit
             if body.len() > limit {
+                log!(
+                    LogFileType::Server,
+                    format!("Error: body too long {}", body.len())
+                );
                 return Err(StatusCode::PAYLOAD_TOO_LARGE);
             }
 
             // Prepare for the next iteration, skip past the chunk data and CRLF
             remaining_str = &after_chunk[2..]; // Assumes CRLF is always present
         } else {
+            log!(
+                LogFileType::Server,
+                "Error: Missing CRLF after chunk size".to_string()
+            );
             return Err(StatusCode::BAD_REQUEST); // Missing CRLF after chunk size
         }
     }
@@ -124,6 +168,8 @@ pub mod path {
 }
 
 pub mod version {
+    use crate::log;
+    use crate::log::*;
     use http::{StatusCode, Version};
 
     pub fn get_version(req: &str) -> Result<Version, StatusCode> {
@@ -138,7 +184,13 @@ pub mod version {
             "HTTP/1.1" => Ok(Version::HTTP_11),
             "HTTP/2.0" => Ok(Version::HTTP_2),
             "HTTP/3.0" => Ok(Version::HTTP_3),
-            _ => Err(StatusCode::HTTP_VERSION_NOT_SUPPORTED),
+            _ => {
+                log!(
+                    LogFileType::Server,
+                    format!("Error: Version not supported {}", version_str)
+                );
+                Err(StatusCode::HTTP_VERSION_NOT_SUPPORTED)
+            }
         }
     }
 }

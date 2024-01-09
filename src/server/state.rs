@@ -2,6 +2,7 @@ use super::{
     Arc, Events, HashMap, Interest, Listener, Poll, Server, ServerConfig, TcpStream, Token,
 };
 
+use crate::log::*;
 use std::io::ErrorKind;
 #[cfg(unix)]
 use std::os::fd::{AsRawFd, FromRawFd};
@@ -103,6 +104,7 @@ fn accept_connection<'a>(
                 .expect("Failed to register new connection");
 
             connections.insert(connection_token, (stream, Arc::clone(&listener.config)));
+
             true
         }
         _ => false,
@@ -121,9 +123,9 @@ fn handle_existing_connection(
     let (stream, conf) = &mut connections.remove(&token).unwrap();
     if let Err(e) = crate::server::handle_client(stream, conf) {
         match e.kind() {
-            ErrorKind::BrokenPipe => eprintln!("Client disconnected: {e}"),
-            ErrorKind::WouldBlock => eprintln!("Client is blocking: {e}"),
-            _ => eprintln!("Error handling client: {e}"),
+            ErrorKind::BrokenPipe => log!(LogFileType::Client, format!("Client disconnected: {e}")),
+            ErrorKind::WouldBlock => log!(LogFileType::Client, format!("Client is blocking: {e}")),
+            _ => log!(LogFileType::Client, format!("Error handling client: {e}")),
         }
     }
     poll.registry()
@@ -131,6 +133,7 @@ fn handle_existing_connection(
         .expect("Failed to deregister stream");
 }
 
+use crate::log;
 use socket2::{SockRef, Socket};
 
 // Function to set linger option on a mio TcpStream

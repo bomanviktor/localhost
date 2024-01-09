@@ -1,3 +1,5 @@
+use crate::log;
+use crate::log::*;
 use crate::server::state::*;
 use crate::server::{Server, SocketAddr, TcpListener};
 use crate::server_config::server_config;
@@ -28,10 +30,19 @@ fn bind_port(port: &crate::type_aliases::Port, host: &str) -> TcpListener {
     match TcpListener::bind(address.parse::<SocketAddr>().unwrap()) {
         Ok(listener) => {
             println!("Server listening on {}", address);
+            log!(
+                LogFileType::Server,
+                format!("Server listening on {}", address)
+            );
+
             listener
         }
         Err(e) => {
             eprintln!("Error: {}. Unable to listen to: {}", e, address);
+            log!(
+                LogFileType::Server,
+                format!("Error: {}. Unable to listen to: {}", e, address)
+            );
             std::process::exit(1)
         }
     }

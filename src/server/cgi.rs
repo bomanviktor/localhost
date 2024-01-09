@@ -1,3 +1,5 @@
+use crate::log;
+use crate::log::*;
 use crate::server::{Bytes, ServerConfig, StatusCode};
 use crate::server_config::route::Settings;
 use std::process::Command;
@@ -120,14 +122,23 @@ pub fn execute_cgi_script(
             Cgi::TypeScript => ("ts-node", vec![path, body]),
             Cgi::Zig => ("zig", vec!["run".to_string(), path, body]),
         },
-        None => return Err(StatusCode::NOT_FOUND),
+        None => {
+            log!(
+                LogFileType::Server,
+                format!("Error: CGI not found {}", &cgi_path)
+            );
+            return Err(StatusCode::NOT_FOUND);
+        }
     };
 
     // Spawn a new process to execute the CGI script and capture its output
     match Command::new(command).args(arguments).output() {
         Ok(output) => Ok(output.stdout),
         Err(e) => {
-            eprintln!("Error executing CGI script: {}", e);
+            log!(
+                LogFileType::Server,
+                format!("Error executing CGI script: {}", e)
+            );
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }

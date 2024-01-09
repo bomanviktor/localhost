@@ -1,4 +1,6 @@
 use super::{Bytes, Method, Request, Response, Route, ServerConfig, StatusCode};
+use crate::log;
+use crate::log::*;
 use crate::server::content_type;
 use crate::server::utils::{get_line, get_split_index};
 use http::header::{ALLOW, CONTENT_LENGTH, CONTENT_TYPE, HOST};
@@ -42,7 +44,15 @@ pub fn handle_method(
         Method::PATCH => not_safe::patch(req)?,
         Method::DELETE => not_safe::delete(req)?,
         Method::CONNECT => unimplemented!(),
-        _ => return Err(StatusCode::BAD_REQUEST),
+        _ => {
+            return {
+                log!(
+                    LogFileType::Server,
+                    format!("Error: Bad Request {:?}", &req)
+                );
+                Err(StatusCode::BAD_REQUEST)
+            }
+        }
     };
     Ok(resp)
 }
@@ -64,7 +74,13 @@ mod safe {
         let path = &req.uri().to_string();
         let body = match fs::read(format!("src{path}")) {
             Ok(bytes) => bytes,
-            Err(_) => return Err(StatusCode::NOT_FOUND),
+            Err(_) => {
+                log!(
+                    LogFileType::Server,
+                    format!("Error: Path does not exist {}", &path)
+                );
+                return Err(StatusCode::NOT_FOUND);
+            }
         };
 
         let mut resp = Response::builder()
@@ -93,7 +109,13 @@ mod safe {
         let path = &req.uri().to_string();
         let metadata = match fs::metadata(format!("src{path}")) {
             Ok(metadata) => metadata,
-            Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+            Err(_) => {
+                log!(
+                    LogFileType::Server,
+                    format!("Error: Could not get head for path '{}'", path)
+                );
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
         };
 
         let resp = Response::builder()
@@ -211,7 +233,13 @@ mod not_safe {
 
         match fs::write(&path, body) {
             Ok(_) => Ok(resp),
-            Err(_) => Err(StatusCode::BAD_REQUEST),
+            Err(_) => {
+                log!(
+                    LogFileType::Server,
+                    format!("Error: Bad request {:?}", &req)
+                );
+                Err(StatusCode::BAD_REQUEST)
+            }
         }
     }
 
@@ -227,7 +255,13 @@ mod not_safe {
 
         match fs::write(path, bytes) {
             Ok(_) => Ok(resp),
-            Err(_) => Err(StatusCode::BAD_REQUEST),
+            Err(_) => {
+                log!(
+                    LogFileType::Server,
+                    format!("Error: Bad request {:?}", &req)
+                );
+                Err(StatusCode::BAD_REQUEST)
+            }
         }
     }
 
@@ -244,9 +278,21 @@ mod not_safe {
         match fs::metadata(path) {
             Ok(_) => match fs::write(path, bytes) {
                 Ok(_) => Ok(resp),
-                Err(_) => Err(StatusCode::BAD_REQUEST),
+                Err(_) => {
+                    log!(
+                        LogFileType::Server,
+                        format!("Error: Bad request {:?}", &req)
+                    );
+                    Err(StatusCode::BAD_REQUEST)
+                }
             },
-            Err(_) => Err(StatusCode::BAD_REQUEST),
+            Err(_) => {
+                log!(
+                    LogFileType::Server,
+                    format!("Error: Bad request {:?}", &req)
+                );
+                Err(StatusCode::BAD_REQUEST)
+            }
         }
     }
 
@@ -254,7 +300,13 @@ mod not_safe {
         let path = &format!("src{}", req.uri().path());
         let body = match fs::read(format!("src{path}")) {
             Ok(bytes) => bytes,
-            Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+            Err(_) => {
+                log!(
+                    LogFileType::Server,
+                    format!("Error: Failed to read body {:?}", &req)
+                );
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
         };
         let resp = Response::builder()
             .status(StatusCode::OK)
@@ -267,7 +319,13 @@ mod not_safe {
             Ok(_) => Ok(resp),
             Err(_) => match fs::remove_dir_all(path) {
                 Ok(_) => Ok(resp),
-                Err(_) => Err(StatusCode::BAD_REQUEST),
+                Err(_) => {
+                    log!(
+                        LogFileType::Server,
+                        format!("Error: Bad request {:?}", &req)
+                    );
+                    Err(StatusCode::BAD_REQUEST)
+                }
             },
         }
     }
