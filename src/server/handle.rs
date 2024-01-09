@@ -55,7 +55,7 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
                 log!(LogFileType::Server, format!("Error: {}", &code));
                 serve_response(stream, error(code, config))
             }
-        }
+        };
     } else if route.settings.as_ref().map_or(false, |s| s.list_directory) {
         let current_dir = std::env::current_dir()?;
 
@@ -117,6 +117,7 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
 }
 
 pub fn serve_response(stream: &mut TcpStream, response: Response<Bytes>) -> io::Result<()> {
+    println!("{response:?}");
     unsafe {
         stream.write_all(&format_response(response))?;
     }
@@ -139,10 +140,11 @@ fn serve_directory_contents(
         entries.into_iter().fold(String::new(), |acc, entry| acc
             + &format!("<li>{}</li>", entry))
     );
+
     let response = Response::builder()
         .status(StatusCode::OK)
         .header(CONTENT_TYPE, "text/html")
-        .body(body.as_bytes().to_vec())
+        .body(Bytes::from(body))
         .unwrap();
 
     serve_response(stream, response)

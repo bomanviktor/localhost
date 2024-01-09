@@ -38,7 +38,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 }),
             },
             Route {
-                path: "/root/files", // this is does not allow files/* to be accessed
+                path: "/files", // this is does not allow files/* to be accessed
                 methods: vec![http::Method::GET],
                 handler: None,
                 //test directory listing
