@@ -4,6 +4,7 @@ use crate::log;
 use crate::log::*;
 use crate::server::errors::error;
 use crate::server::handle_method;
+use crate::server::path::add_root_to_path;
 use crate::server::redirections::redirect;
 use crate::server::*;
 use crate::server_config::route::Settings;
@@ -36,6 +37,7 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
         }
     };
 
+    // Handle redirections
     let route = match get_route(&request, config) {
         Ok(route) => route,
         Err((code, path)) if code.is_redirection() => {
@@ -47,7 +49,7 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
         }
     };
 
-    // Handle the request
+    // Use the routes' handler
     if let Some(handler) = route.handler {
         return match handler(&request, config) {
             Ok(response) => serve_response(stream, response),
@@ -56,53 +58,28 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
                 serve_response(stream, error(code, config))
             }
         };
-    } else if route.settings.as_ref().map_or(false, |s| s.list_directory) {
-        let current_dir = std::env::current_dir()?;
+    }
 
-        println!("Current directory: {:?}", current_dir);
-
-        // Read the contents of the directory
-        let entries = fs::read_dir(current_dir)?;
-
-        for entry in entries {
-            let entry = entry?;
-            let path = entry.path();
-
-            // Print the path
-            if path.is_dir() {
-                println!("Directory: {:?}", path);
-            } else {
-                println!("File: {:?}", path);
+    if let Some(settings) = &route.settings {
+        let request_path = &request.uri().to_string();
+        if is_cgi_request(request_path) {
+            match execute_cgi_script(&request_string, config, settings) {
+                Ok(resp) => {
+                    stream.write_all(&resp).unwrap();
+                    stream.flush().expect("could not flush");
+                }
+                Err(code) => {
+                    log!(LogFileType::Server, format!("Error: {}", &code));
+                    return serve_response(stream, error(code, config));
+                }
             }
+            return Ok(());
         }
 
-        let path = format!("./src{}/", request.uri().path());
-
-        println!("Computed path for directory listing: {}", path);
+        let path = &add_root_to_path(&route, request_path);
         if std::path::Path::new(&path).is_dir() {
-            println!("Confirmed directory. Proceeding to list contents.");
-            return serve_directory_contents(stream, &path, &route.settings.unwrap());
-        } else {
-            println!("Path is not a directory.");
+            return serve_directory_contents(stream, path, settings);
         }
-        fs::read_dir(path.clone())
-            .map_err(|_| io::Error::new(io::ErrorKind::NotFound, "Directory not found"))?;
-        if std::path::Path::new(&path).is_dir() {
-            println!("is dir");
-            return serve_directory_contents(stream, &path, &route.settings.unwrap());
-        }
-    } else if route.settings.is_some() && is_cgi_request(&request.uri().to_string()) {
-        match execute_cgi_script(&request_string, config, &route.settings.unwrap()) {
-            Ok(resp) => {
-                stream.write_all(&resp).unwrap();
-                stream.flush().expect("could not flush");
-            }
-            Err(code) => {
-                log!(LogFileType::Server, format!("Error: {}", &code));
-                return serve_response(stream, error(code, config));
-            }
-        }
-        return Ok(());
     }
 
     // Handle based on HTTP method
@@ -117,7 +94,6 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
 }
 
 pub fn serve_response(stream: &mut TcpStream, response: Response<Bytes>) -> io::Result<()> {
-    println!("{response:?}");
     unsafe {
         stream.write_all(&format_response(response))?;
     }
@@ -129,7 +105,6 @@ fn serve_directory_contents(
     path: &str,
     _settings: &Settings,
 ) -> io::Result<()> {
-    println!("Path: {}", path);
     let entries = fs::read_dir(path)
         .map_err(|_| io::Error::new(io::ErrorKind::NotFound, "Directory not found"))?
         .map(|res| res.map(|e| e.file_name().into_string().unwrap_or_default()))

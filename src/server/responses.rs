@@ -117,6 +117,7 @@ pub mod informational {
 
 pub mod redirections {
     use super::*;
+    use crate::type_aliases::Path;
     use http::header::{HOST, LOCATION, SERVER};
 
     pub fn redirect(
@@ -135,8 +136,8 @@ pub mod redirections {
             .unwrap()
     }
 
-    pub fn is_redirect(path: &str, other_path: &str) -> bool {
-        path != other_path
+    pub fn is_redirect(path: &str, redirections: &[Path]) -> bool {
+        redirections.contains(&path)
     }
 }
 

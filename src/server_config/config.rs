@@ -30,7 +30,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 settings: Some(Settings {
                     http_redirections: vec![],
                     redirect_status_code: http::StatusCode::MOVED_PERMANENTLY,
-                    root_path: Some("./rootqweeqw"),
+                    root_path: None,
                     default_if_url_is_dir: "index.html",
                     default_if_request_is_dir: "index.html",
                     cgi_def: HashMap::new(),
@@ -45,7 +45,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 settings: Some(Settings {
                     http_redirections: vec![],
                     redirect_status_code: http::StatusCode::MOVED_PERMANENTLY,
-                    root_path: Some("./root123"), // not really working yet
+                    root_path: Some("./src/"), // not really working yet
                     default_if_url_is_dir: "index.html", //WIP
                     default_if_request_is_dir: "index.html", //WIP
                     cgi_def: HashMap::new(),

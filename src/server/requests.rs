@@ -41,7 +41,12 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
 
     // Decapitate the request
     let body_start_index = req_str.find("\r\n\r\n").unwrap_or(req_str.len());
-    let body_str = &req_str[body_start_index + 4..]; // "+ 4" to skip past "\r\n\r\n"
+
+    let body_str = if req_str.contains("\r\n\r\n") {
+        &req_str[body_start_index + 4..] // "+ 4" to skip past "\r\n\r\n"
+    } else {
+        req_str
+    };
 
     let body = if headers::is_chunked(request_builder.headers_ref()) {
         match get_chunked_body(body_str, conf.body_size_limit) {
@@ -146,6 +151,7 @@ pub mod path {
         requested_path: Path<'a>,
         routes: &[Route<'a>],
     ) -> Option<(usize, Path<'a>)> {
+        // Check for _exact_ matches in path
         for (i, route) in routes.iter().enumerate() {
             if route.path == requested_path {
                 return Some((i, route.path));
@@ -160,10 +166,42 @@ pub mod path {
                 .http_redirections
                 .contains(&requested_path)
             {
+                println!("here");
                 return Some((i, route.path));
             }
         }
-        None // Path does not exist in allowed paths or in redirections
+
+        let mut path_str = "";
+        let mut index = usize::MAX;
+
+        // Check for paths with matching roots
+        for (i, route) in routes.iter().enumerate() {
+            if !requested_path.starts_with(route.path) {
+                continue;
+            }
+
+            if path_str.is_empty() || route.path.len() < path_str.len() {
+                println!("route: {route:?} at index: {i}");
+                path_str = route.path;
+                index = i;
+            }
+        }
+
+        if index == usize::MAX {
+            None
+        } else {
+            println!("return: {index}, {path_str}");
+            Some((index, &path_str))
+        }
+    }
+
+    pub fn add_root_to_path<'a>(route: &'a Route, uri: &'a str) -> String {
+        if let Some(settings) = &route.settings {
+            let root = settings.root_path.unwrap_or_default();
+            format!("{root}{uri}")
+        } else {
+            uri.to_string()
+        }
     }
 }
 
@@ -265,7 +303,7 @@ pub mod utils {
         let lines = str.split_whitespace().collect::<Vec<&str>>();
         if lines.is_empty() {
             ""
-        } else if index > lines.len() {
+        } else if index >= lines.len() {
             lines[0]
         } else {
             lines[index]

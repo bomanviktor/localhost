@@ -25,15 +25,11 @@ pub fn get_route<'a>(
         return Err((StatusCode::NOT_FOUND, "".to_string()));
     }
 
-    if is_redirect(url_path, routed_path) {
-        log!(
-            LogFileType::Server,
-            format!("Error: Path not redirect: {} != {}", url_path, routed_path)
-        );
-        return Err((
-            route.settings.unwrap().redirect_status_code,
-            routed_path.to_string(),
-        ));
+    // Check if it is a redirect
+    if let Some(settings) = &route.settings {
+        if is_redirect(url_path, &settings.http_redirections) {
+            return Err((settings.redirect_status_code, routed_path.to_string()));
+        }
     }
 
     // Check if the method is allowed on route
