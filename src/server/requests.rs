@@ -166,7 +166,6 @@ pub mod path {
                 .http_redirections
                 .contains(&requested_path)
             {
-                println!("here");
                 return Some((i, route.path));
             }
         }
@@ -181,7 +180,6 @@ pub mod path {
             }
 
             if path_str.is_empty() || route.path.len() < path_str.len() {
-                println!("route: {route:?} at index: {i}");
                 path_str = route.path;
                 index = i;
             }
@@ -190,7 +188,6 @@ pub mod path {
         if index == usize::MAX {
             None
         } else {
-            println!("return: {index}, {path_str}");
             Some((index, &path_str))
         }
     }

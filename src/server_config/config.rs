@@ -38,15 +38,15 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 }),
             },
             Route {
-                path: "/files", // this is does not allow files/* to be accessed
+                path: "/files", // this does allow files/* to be accessed
                 methods: vec![http::Method::GET],
                 handler: None,
                 //test directory listing
                 settings: Some(Settings {
                     http_redirections: vec![],
                     redirect_status_code: http::StatusCode::MOVED_PERMANENTLY,
-                    root_path: Some("./src/"), // not really working yet
-                    default_if_url_is_dir: "index.html", //WIP
+                    root_path: Some("./src/"),
+                    default_if_url_is_dir: "index.html",     //WIP
                     default_if_request_is_dir: "index.html", //WIP
                     cgi_def: HashMap::new(),
                     list_directory: true,

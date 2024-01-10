@@ -107,13 +107,28 @@ fn serve_directory_contents(
 ) -> io::Result<()> {
     let entries = fs::read_dir(path)
         .map_err(|_| io::Error::new(io::ErrorKind::NotFound, "Directory not found"))?
-        .map(|res| res.map(|e| e.file_name().into_string().unwrap_or_default()))
+        .map(|res| res.map(|e| e.path()))
         .collect::<Result<Vec<_>, io::Error>>()?;
 
     let body = format!(
         "<html><body><ul>{}</ul></body></html>",
-        entries.into_iter().fold(String::new(), |acc, entry| acc
-            + &format!("<li>{}</li>", entry))
+        entries.into_iter().fold(String::new(), |acc, entry_path| {
+            // Construct the relative path
+            let relative_path = entry_path
+                .strip_prefix(path)
+                .unwrap_or(&entry_path)
+                .display()
+                .to_string()
+                .trim_start_matches('/')
+                .to_string();
+
+            let entry_name = entry_path.file_name().unwrap_or_default().to_string_lossy();
+
+            acc + &format!(
+                "<li><a href=\"/files/{}\">{}</a></li>",
+                relative_path, entry_name
+            )
+        })
     );
 
     let response = Response::builder()
