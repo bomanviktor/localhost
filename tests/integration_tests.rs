@@ -141,3 +141,47 @@ mod chunked_encoding {
         fn invalid() {}
     }
 }
+
+#[allow(dead_code)]
+mod test_requests {
+    use http::StatusCode;
+    mod utils {
+        use super::*;
+        use localhost::server::utils::get_split_index;
+        use std::str::FromStr;
+
+        pub fn get_status(header: &str) -> StatusCode {
+            let status = get_split_index(header, 1);
+            StatusCode::from_str(status).unwrap_or(StatusCode::OK)
+        }
+    }
+}
+
+
+#[cfg(test)]
+mod sessions_tests {
+    use http::{HeaderValue, Request, StatusCode};
+    use std::collections::HashMap;
+    use http::header::COOKIE;
+    use localhost::server::update_cookie;
+
+    #[test]
+    fn test_update_cookie_existing() {
+        use localhost::server_config::server_config;
+        let configs = server_config();
+        let mut headers = HashMap::new();
+        headers.insert(COOKIE, HeaderValue::from_static("existing_cookie_value"));
+
+        let req = Request::builder()
+            .uri("/test")
+            .header(COOKIE, "existing_cookie_value")
+            .body(String::new())
+            .unwrap();
+
+        for config in configs {
+            let result = update_cookie(&req, &config).unwrap();
+            assert_eq!(result.status(), StatusCode::OK);
+            assert!(!result.headers().contains_key(COOKIE));
+        }
+    }
+}
