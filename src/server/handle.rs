@@ -7,7 +7,6 @@ use crate::server::handle_method;
 use crate::server::path::add_root_to_path;
 use crate::server::redirections::redirect;
 use crate::server::*;
-use crate::server_config::route::Settings;
 use http::header::CONTENT_TYPE;
 
 pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Result<()> {
@@ -70,15 +69,9 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
         };
     }
 
-    if let Some(settings) = &route.settings {
-        if is_cgi_request(request.uri().path()) {
-            return Ok(());
-        }
-
-        let path = &add_root_to_path(&route, request.uri());
-        if std::path::Path::new(&path).is_dir() {
-            return serve_directory_contents(stream, path, settings);
-        }
+    let path = &add_root_to_path(&route, request.uri());
+    if std::path::Path::new(&path).is_dir() {
+        return serve_directory_contents(stream, path);
     }
 
     // Handle based on HTTP method
@@ -99,11 +92,7 @@ pub fn serve_response(stream: &mut TcpStream, response: Response<Bytes>) -> io::
     stream.flush()
 }
 
-fn serve_directory_contents(
-    stream: &mut TcpStream,
-    path: &str,
-    _settings: &Settings,
-) -> io::Result<()> {
+fn serve_directory_contents(stream: &mut TcpStream, path: &str) -> io::Result<()> {
     let entries = fs::read_dir(path)
         .map_err(|_| io::Error::new(io::ErrorKind::NotFound, "Directory not found"))?
         .map(|res| res.map(|e| e.path()))

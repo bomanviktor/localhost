@@ -160,14 +160,10 @@ pub mod path {
             if route.settings.is_none() {
                 continue;
             }
-            if route
-                .settings
-                .clone()
-                .unwrap()
-                .http_redirections
-                .contains(&requested_path)
-            {
-                return Some((i, route.path));
+            if let Some(redirections) = route.settings.clone().unwrap().http_redirections {
+                if redirections.contains(&requested_path) {
+                    return Some((i, route.path));
+                }
             }
         }
 

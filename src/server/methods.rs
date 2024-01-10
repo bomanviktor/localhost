@@ -128,7 +128,7 @@ mod safe {
             .header(CONTENT_TYPE, content_type(path))
             .header(CONTENT_LENGTH, metadata.len().to_string()) // Set the Content-Length header
             .body(vec![]) // No body for HEAD
-            .unwrap();
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         Ok(resp)
     }
@@ -171,7 +171,7 @@ mod safe {
             .header(CONTENT_TYPE, "message/http")
             .header("Via", via)
             .body(Bytes::from(request_string))
-            .unwrap();
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         Ok(resp)
     }
@@ -194,7 +194,7 @@ mod safe {
             .status(StatusCode::OK)
             .header(ALLOW, allowed_methods)
             .body(vec![]) // Empty body for OPTIONS
-            .unwrap();
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         Ok(resp)
     }
@@ -218,13 +218,16 @@ mod not_safe {
             .header(CONTENT_TYPE, content_type(path))
             .header(CONTENT_LENGTH, body.len())
             .body(body.clone())
-            .unwrap();
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         // Resource does not exist, so create it.
         if fs::metadata(path).is_err() {
             return match fs::write(path, body) {
                 Ok(_) => Ok(resp),
-                Err(_) => Err(StatusCode::BAD_REQUEST),
+                Err(e) => {
+                    log!(LogFileType::Server, format!("Error: {e}"));
+                    Err(StatusCode::BAD_REQUEST)
+                }
             };
         }
 
@@ -242,11 +245,8 @@ mod not_safe {
 
         match fs::write(&path, body) {
             Ok(_) => Ok(resp),
-            Err(_) => {
-                log!(
-                    LogFileType::Server,
-                    format!("Error: Bad request {:?}", &req)
-                );
+            Err(e) => {
+                log!(LogFileType::Server, format!("Error: {e}"));
                 Err(StatusCode::BAD_REQUEST)
             }
         }
@@ -265,7 +265,7 @@ mod not_safe {
             .header(CONTENT_TYPE, content_type(path))
             .header(CONTENT_LENGTH, bytes.len())
             .body(bytes.clone())
-            .unwrap();
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         match fs::write(path, bytes) {
             Ok(_) => Ok(resp),
@@ -292,7 +292,7 @@ mod not_safe {
             .header(CONTENT_TYPE, content_type(path))
             .header(CONTENT_LENGTH, bytes.len())
             .body(bytes.clone())
-            .unwrap();
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         match fs::metadata(path) {
             Ok(_) => match fs::write(path, bytes) {
@@ -337,7 +337,7 @@ mod not_safe {
             .header(CONTENT_TYPE, content_type(path))
             .header(CONTENT_LENGTH, body.len())
             .body(body)
-            .unwrap();
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         match fs::remove_file(path) {
             Ok(_) => Ok(resp),

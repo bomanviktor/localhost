@@ -50,17 +50,21 @@ pub fn execute_cgi_script(
     config: &ServerConfig,
 ) -> Result<Response<Bytes>, StatusCode> {
     let route = &get_route(req, config).unwrap();
-
     let settings = match &route.settings {
         Some(s) => s,
         None => return Err(StatusCode::BAD_REQUEST),
     };
+
+    if settings.cgi_def.is_none() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
     let path = add_root_to_path(route, req.uri());
     let body = req.body().to_string();
     let file_extension = path.split('.').rev().collect::<Vec<&str>>()[0].trim_end();
 
     // Check if the file extension is associated with a CGI script
-    let (command, arguments) = match settings.cgi_def.get(file_extension) {
+    let (command, arguments) = match settings.cgi_def.clone().unwrap().get(file_extension) {
         Some(cgi_type) => match cgi_type {
             Cgi::Ada => ("ada", vec![path, body]),
             Cgi::C => ("./compiled/c_binary", vec![body]), // Replace with actual compiled binary path
@@ -154,5 +158,8 @@ pub fn execute_cgi_script(
         }
     }
 
-    Ok(resp.body(body).unwrap())
+    let response = resp
+        .body(body)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(response)
 }
