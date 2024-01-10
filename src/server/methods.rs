@@ -39,7 +39,7 @@ pub fn handle_method(
         //================//
         // UNSAFE METHODS //
         //================//
-        Method::POST => not_safe::post(req)?,
+        Method::POST => not_safe::post(req, config)?,
         Method::PUT => not_safe::put(req, config)?,
         Method::PATCH => not_safe::patch(req, config)?,
         Method::DELETE => not_safe::delete(req, config)?,
@@ -73,7 +73,7 @@ mod safe {
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, &req.uri().to_string());
+        let path = &add_root_to_path(route, req.uri());
         let body = match fs::read(path) {
             Ok(bytes) => bytes,
             Err(_) => {
@@ -109,7 +109,7 @@ mod safe {
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, &req.uri().to_string());
+        let path = &add_root_to_path(route, req.uri());
         let metadata = match fs::metadata(path) {
             Ok(metadata) => metadata,
             Err(_) => {
@@ -204,8 +204,12 @@ mod not_safe {
     use super::*;
     use crate::server::get_route;
     use crate::server::path::add_root_to_path;
-    pub fn post(req: &Request<String>) -> Result<Response<Bytes>, StatusCode> {
-        let path = &format!("src{}", req.uri().path());
+    pub fn post(
+        req: &Request<String>,
+        config: &ServerConfig,
+    ) -> Result<Response<Bytes>, StatusCode> {
+        let route = &get_route(req, config).unwrap();
+        let path = &add_root_to_path(route, req.uri());
         let body = req.body().as_bytes().to_vec();
 
         let resp = Response::builder()
@@ -253,8 +257,9 @@ mod not_safe {
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, &req.uri().to_string());
+        let path = &add_root_to_path(route, req.uri());
         let bytes = req.body().as_bytes().to_vec();
+
         let resp = Response::builder()
             .status(StatusCode::OK)
             .header(CONTENT_TYPE, content_type(path))
@@ -279,8 +284,9 @@ mod not_safe {
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, &req.uri().to_string());
+        let path = &add_root_to_path(route, req.uri());
         let bytes = req.body().as_bytes().to_vec();
+
         let resp = Response::builder()
             .status(StatusCode::OK)
             .header(CONTENT_TYPE, content_type(path))
@@ -314,8 +320,8 @@ mod not_safe {
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, &req.uri().to_string());
-        let body = match fs::read(format!("src{path}")) {
+        let path = &add_root_to_path(route, req.uri());
+        let body = match fs::read(path) {
             Ok(bytes) => bytes,
             Err(_) => {
                 log!(
@@ -325,6 +331,7 @@ mod not_safe {
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         };
+
         let resp = Response::builder()
             .status(StatusCode::OK)
             .header(CONTENT_TYPE, content_type(path))
