@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use config::route::Settings;
 
-use crate::server::{update_cookie, validate_cookie};
+use crate::server::{update_cookie, validate_cookie, Cgi};
 pub use crate::server_config::*;
 pub fn server_config() -> Vec<ServerConfig<'static>> {
     vec![ServerConfig {
@@ -24,7 +24,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 settings: None,
             },
             Route {
-                path: "/test.png",
+                path: "/cgi/",
                 methods: vec![http::Method::GET],
                 handler: None,
                 settings: Some(Settings {
@@ -33,7 +33,21 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                     root_path: None,
                     default_if_url_is_dir: "index.html",
                     default_if_request_is_dir: "index.html",
-                    cgi_def: HashMap::new(),
+                    cgi_def: HashMap::from([(".js", Cgi::JavaScript)]),
+                    list_directory: false,
+                }),
+            },
+            Route {
+                path: "/test",
+                methods: vec![http::Method::GET, http::Method::POST],
+                handler: None,
+                settings: Some(Settings {
+                    http_redirections: vec![],
+                    redirect_status_code: http::StatusCode::MOVED_PERMANENTLY,
+                    root_path: None,
+                    default_if_url_is_dir: "index.html",
+                    default_if_request_is_dir: "index.html",
+                    cgi_def: HashMap::from([(".js", Cgi::JavaScript)]),
                     list_directory: false,
                 }),
             },
@@ -41,22 +55,15 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 path: "/files", // this does allow files/* to be accessed
                 methods: vec![http::Method::GET],
                 handler: None,
-                //test directory listing
                 settings: Some(Settings {
                     http_redirections: vec![],
                     redirect_status_code: http::StatusCode::MOVED_PERMANENTLY,
-                    root_path: Some("./src/"),
+                    root_path: None,
                     default_if_url_is_dir: "index.html",     //WIP
                     default_if_request_is_dir: "index.html", //WIP
                     cgi_def: HashMap::new(),
                     list_directory: true,
                 }),
-            },
-            Route {
-                path: "/test",
-                methods: vec![http::Method::GET, http::Method::POST],
-                handler: None,
-                settings: None,
             },
         ],
     }]

@@ -188,13 +188,13 @@ pub mod path {
         if index == usize::MAX {
             None
         } else {
-            Some((index, &path_str))
+            Some((index, path_str))
         }
     }
 
     pub fn add_root_to_path<'a>(route: &'a Route, uri: &'a str) -> String {
         if let Some(settings) = &route.settings {
-            let root = settings.root_path.unwrap_or_default();
+            let root = settings.root_path.unwrap_or(".");
             format!("{root}{uri}")
         } else {
             uri.to_string()
