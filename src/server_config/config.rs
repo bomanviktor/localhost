@@ -33,7 +33,12 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                     root_path: None,
                     default_if_url_is_dir: "index.html",
                     default_if_request_is_dir: "index.html",
-                    cgi_def: HashMap::from([(".js", Cgi::JavaScript)]),
+                    cgi_def: HashMap::from([
+                        ("js", Cgi::JavaScript),
+                        ("php", Cgi::PHP),
+                        ("py", Cgi::Python),
+                        ("rb", Cgi::Ruby),
+                    ]),
                     list_directory: false,
                 }),
             },

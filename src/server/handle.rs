@@ -49,6 +49,16 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
         }
     };
 
+    if is_cgi_request(request.uri().path()) {
+        return match execute_cgi_script(&request, config) {
+            Ok(resp) => serve_response(stream, resp),
+            Err(code) => {
+                log!(LogFileType::Server, format!("Error: {}", &code));
+                return serve_response(stream, error(code, config));
+            }
+        };
+    }
+
     // Use the routes' handler
     if let Some(handler) = route.handler {
         return match handler(&request, config) {
@@ -61,22 +71,11 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
     }
 
     if let Some(settings) = &route.settings {
-        let request_path = &request.uri().to_string();
-        if is_cgi_request(request_path) {
-            match execute_cgi_script(&request_string, config, settings) {
-                Ok(resp) => {
-                    stream.write_all(&resp).unwrap();
-                    stream.flush().expect("could not flush");
-                }
-                Err(code) => {
-                    log!(LogFileType::Server, format!("Error: {}", &code));
-                    return serve_response(stream, error(code, config));
-                }
-            }
+        if is_cgi_request(request.uri().path()) {
             return Ok(());
         }
 
-        let path = &add_root_to_path(&route, request_path);
+        let path = &add_root_to_path(&route, request.uri());
         if std::path::Path::new(&path).is_dir() {
             return serve_directory_contents(stream, path, settings);
         }

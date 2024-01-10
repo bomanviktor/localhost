@@ -1,7 +1,9 @@
 use crate::log;
 use crate::log::*;
-use crate::server::{Bytes, ServerConfig, StatusCode};
-use crate::server_config::route::Settings;
+use crate::server::path::add_root_to_path;
+use crate::server::{get_route, Bytes, ServerConfig, StatusCode};
+use http::header::{CONTENT_LENGTH, CONTENT_TYPE, HOST, TRANSFER_ENCODING};
+use http::{HeaderName, Request, Response};
 use std::process::Command;
 
 #[derive(Clone, Debug)]
@@ -39,27 +41,23 @@ pub enum Cgi {
 }
 
 pub fn is_cgi_request(path: &str) -> bool {
-    path.starts_with("/cgi/")
+    path.starts_with("/cgi/") || path.starts_with("./cgi/")
 }
 
+const STANDARD_HEADERS: [HeaderName; 1] = [TRANSFER_ENCODING];
 pub fn execute_cgi_script(
-    request_str: &str,
+    req: &Request<String>,
     config: &ServerConfig,
-    settings: &Settings,
-) -> Result<Bytes, StatusCode> {
-    let cgi_path = crate::server::path::get_path(request_str);
+) -> Result<Response<Bytes>, StatusCode> {
+    let route = &get_route(req, config).unwrap();
 
-    let path = match settings.root_path {
-        Some(root) => format!("{}{}", root, cgi_path),
-        None => format!("src{}", cgi_path),
+    let settings = match &route.settings {
+        Some(s) => s,
+        None => return Err(StatusCode::BAD_REQUEST),
     };
-
-    let body = match crate::server::body::get_body(request_str, config.body_size_limit) {
-        Some(b) => b.to_string(),
-        None => return Err(StatusCode::PAYLOAD_TOO_LARGE),
-    };
-
-    let file_extension = cgi_path.split('.').rev().collect::<Vec<&str>>()[0].trim_end();
+    let path = add_root_to_path(route, req.uri());
+    let body = req.body().to_string();
+    let file_extension = path.split('.').rev().collect::<Vec<&str>>()[0].trim_end();
 
     // Check if the file extension is associated with a CGI script
     let (command, arguments) = match settings.cgi_def.get(file_extension) {
@@ -125,21 +123,36 @@ pub fn execute_cgi_script(
         None => {
             log!(
                 LogFileType::Server,
-                format!("Error: CGI not found {}", &cgi_path)
+                format!("Error: CGI not found {}", path)
             );
             return Err(StatusCode::NOT_FOUND);
         }
     };
 
     // Spawn a new process to execute the CGI script and capture its output
-    match Command::new(command).args(arguments).output() {
-        Ok(output) => Ok(output.stdout),
+    let body = match Command::new(command).args(arguments).output() {
+        Ok(output) => output.stdout,
         Err(e) => {
             log!(
                 LogFileType::Server,
                 format!("Error executing CGI script: {}", e)
             );
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    let mut resp = Response::builder()
+        .version(req.version())
+        .header(HOST, config.host)
+        .status(StatusCode::OK)
+        .header(CONTENT_TYPE, "text/html")
+        .header(CONTENT_LENGTH, body.len());
+
+    for (key, value) in req.headers() {
+        if STANDARD_HEADERS.contains(key) {
+            resp = resp.header(key, value);
         }
     }
+
+    Ok(resp.body(body).unwrap())
 }
