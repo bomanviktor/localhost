@@ -96,6 +96,10 @@ fn accept_connection<'a>(
 
             set_linger_option(&stream, linger_duration).expect("Failed to set linger option");
 
+            if let Err(e) = stream.set_ttl(60) {
+                log!(LogFileType::Server, format!("Error: {e}"));
+            }
+
             let connection_token = Token(*token_id);
             *token_id += 1;
 
