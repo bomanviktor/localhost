@@ -39,7 +39,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                         ("py", Cgi::Python),
                         ("rb", Cgi::Ruby),
                     ])),
-                    list_directory: false,
+                    list_directory: true,
                 }),
             },
             Route {
