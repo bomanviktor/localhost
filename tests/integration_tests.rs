@@ -61,7 +61,7 @@ mod chunked_encoding {
             let body = "Wiki\r\npedia\r\n in\r\n\r\nchunks.\r\n\r\n";
 
             let client = Client::new();
-            let valid_endpoint = "/test";
+            let valid_endpoint = "/test.txt";
 
             let response = send_chunked_request(
                 &client,

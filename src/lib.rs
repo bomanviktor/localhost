@@ -40,23 +40,13 @@ pub mod server_config {
 
         #[derive(Clone, Debug)]
         pub struct Settings<'a> {
-            pub http_redirections: Vec<Path<'a>>, // From endpoint, to path
-            pub redirect_status_code: StatusCode,
+            pub http_redirections: Option<Vec<Path<'a>>>, // From endpoint, to path
+            pub redirect_status_code: Option<StatusCode>,
             pub root_path: Option<Path<'a>>,
-            pub default_if_url_is_dir: Path<'a>, // TODO: Implement
-            pub default_if_request_is_dir: Path<'a>, // TODO: Implement
-            pub cgi_def: HashMap<FileExtension<'a>, Cgi>,
-            pub list_directory: bool, // TODO: Implement
-        }
-
-        impl Settings<'_> {
-            pub fn format_path(&self, path: Path) -> String {
-                if self.root_path.is_some() {
-                    format!("{}{}", self.root_path.unwrap(), path)
-                } else {
-                    format!("src{}", path)
-                }
-            }
+            pub default_if_url_is_dir: Option<Path<'a>>, // TODO: Implement
+            pub default_if_request_is_dir: Option<Path<'a>>, // TODO: Implement
+            pub cgi_def: Option<HashMap<FileExtension<'a>, Cgi>>,
+            pub list_directory: bool,
         }
     }
 }

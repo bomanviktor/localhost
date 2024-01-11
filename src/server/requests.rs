@@ -139,6 +139,7 @@ pub mod path {
     use super::*;
     use crate::server::utils::{get_line, get_split_index};
     use crate::type_aliases::Path;
+    use http::Uri;
 
     /// `path` gets the path from the `request`
     pub fn get_path(req: &str) -> &str {
@@ -159,14 +160,10 @@ pub mod path {
             if route.settings.is_none() {
                 continue;
             }
-            if route
-                .settings
-                .clone()
-                .unwrap()
-                .http_redirections
-                .contains(&requested_path)
-            {
-                return Some((i, route.path));
+            if let Some(redirections) = route.settings.clone().unwrap().http_redirections {
+                if redirections.contains(&requested_path) {
+                    return Some((i, route.path));
+                }
             }
         }
 
@@ -188,16 +185,16 @@ pub mod path {
         if index == usize::MAX {
             None
         } else {
-            Some((index, &path_str))
+            Some((index, path_str))
         }
     }
 
-    pub fn add_root_to_path<'a>(route: &'a Route, uri: &'a str) -> String {
+    pub fn add_root_to_path(route: &Route, uri: &Uri) -> String {
         if let Some(settings) = &route.settings {
-            let root = settings.root_path.unwrap_or_default();
-            format!("{root}{uri}")
+            let root = settings.root_path.unwrap_or(".");
+            format!("{root}{}", uri.path())
         } else {
-            uri.to_string()
+            uri.path().to_string()
         }
     }
 }

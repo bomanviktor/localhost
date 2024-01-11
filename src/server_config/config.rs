@@ -1,8 +1,7 @@
+use config::route::Settings;
 use std::collections::HashMap;
 
-use config::route::Settings;
-
-use crate::server::{update_cookie, validate_cookie};
+use crate::server::{update_cookie, validate_cookie, Cgi};
 pub use crate::server_config::*;
 pub fn server_config() -> Vec<ServerConfig<'static>> {
     vec![ServerConfig {
@@ -24,39 +23,51 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 settings: None,
             },
             Route {
-                path: "/test.png",
+                path: "/cgi",
                 methods: vec![http::Method::GET],
                 handler: None,
                 settings: Some(Settings {
-                    http_redirections: vec![],
-                    redirect_status_code: http::StatusCode::MOVED_PERMANENTLY,
+                    http_redirections: None,
+                    redirect_status_code: None,
                     root_path: None,
-                    default_if_url_is_dir: "index.html",
-                    default_if_request_is_dir: "index.html",
-                    cgi_def: HashMap::new(),
-                    list_directory: false,
-                }),
-            },
-            Route {
-                path: "/files", // this does allow files/* to be accessed
-                methods: vec![http::Method::GET],
-                handler: None,
-                //test directory listing
-                settings: Some(Settings {
-                    http_redirections: vec![],
-                    redirect_status_code: http::StatusCode::MOVED_PERMANENTLY,
-                    root_path: Some("./src/"),
-                    default_if_url_is_dir: "index.html",     //WIP
-                    default_if_request_is_dir: "index.html", //WIP
-                    cgi_def: HashMap::new(),
+                    default_if_url_is_dir: None,
+                    default_if_request_is_dir: None,
+                    cgi_def: Some(HashMap::from([
+                        ("js", Cgi::JavaScript),
+                        ("php", Cgi::PHP),
+                        ("py", Cgi::Python),
+                        ("rb", Cgi::Ruby),
+                    ])),
                     list_directory: true,
                 }),
             },
             Route {
-                path: "/test",
+                path: "/test.txt",
                 methods: vec![http::Method::GET, http::Method::POST],
                 handler: None,
-                settings: None,
+                settings: Some(Settings {
+                    http_redirections: None,
+                    redirect_status_code: None,
+                    root_path: Some("./files"),
+                    default_if_url_is_dir: None,
+                    default_if_request_is_dir: None,
+                    cgi_def: None,
+                    list_directory: false,
+                }),
+            },
+            Route {
+                path: "/files", // this does allow ./files/* to be accessed
+                methods: vec![http::Method::GET],
+                handler: None,
+                settings: Some(Settings {
+                    http_redirections: None,
+                    redirect_status_code: None,
+                    root_path: None,
+                    default_if_url_is_dir: None,
+                    default_if_request_is_dir: None,
+                    cgi_def: None,
+                    list_directory: true,
+                }),
             },
         ],
     }]

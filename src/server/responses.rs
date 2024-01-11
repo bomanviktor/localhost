@@ -136,8 +136,12 @@ pub mod redirections {
             .unwrap()
     }
 
-    pub fn is_redirect(path: &str, redirections: &[Path]) -> bool {
-        redirections.contains(&path)
+    pub fn is_redirect(path: &str, redirections: &Option<Vec<Path>>) -> bool {
+        if redirections.is_none() {
+            return false;
+        }
+
+        redirections.clone().unwrap().contains(&path)
     }
 }
 

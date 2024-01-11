@@ -39,11 +39,10 @@ pub fn handle_method(
         //================//
         // UNSAFE METHODS //
         //================//
-        Method::POST => not_safe::post(req)?,
-        Method::PUT => not_safe::put(req)?,
-        Method::PATCH => not_safe::patch(req)?,
-        Method::DELETE => not_safe::delete(req)?,
-        Method::CONNECT => unimplemented!(),
+        Method::POST => not_safe::post(req, config)?,
+        Method::PUT => not_safe::put(req, config)?,
+        Method::PATCH => not_safe::patch(req, config)?,
+        Method::DELETE => not_safe::delete(req, config)?,
         _ => {
             return {
                 log!(
@@ -59,6 +58,8 @@ pub fn handle_method(
 
 mod safe {
     use super::*;
+    use crate::server::get_route;
+    use crate::server::path::add_root_to_path;
     use http::header::{TRANSFER_ENCODING, VIA};
     use http::HeaderName;
 
@@ -71,8 +72,9 @@ mod safe {
         req: &Request<String>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
-        let path = &req.uri().to_string();
-        let body = match fs::read(format!("src{path}")) {
+        let route = &get_route(req, config).unwrap();
+        let path = &add_root_to_path(route, req.uri());
+        let body = match fs::read(path) {
             Ok(bytes) => bytes,
             Err(_) => {
                 log!(
@@ -106,8 +108,9 @@ mod safe {
         req: &Request<String>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
-        let path = &req.uri().to_string();
-        let metadata = match fs::metadata(format!("src{path}")) {
+        let route = &get_route(req, config).unwrap();
+        let path = &add_root_to_path(route, req.uri());
+        let metadata = match fs::metadata(path) {
             Ok(metadata) => metadata,
             Err(_) => {
                 log!(
@@ -125,7 +128,7 @@ mod safe {
             .header(CONTENT_TYPE, content_type(path))
             .header(CONTENT_LENGTH, metadata.len().to_string()) // Set the Content-Length header
             .body(vec![]) // No body for HEAD
-            .unwrap();
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         Ok(resp)
     }
@@ -168,7 +171,7 @@ mod safe {
             .header(CONTENT_TYPE, "message/http")
             .header("Via", via)
             .body(Bytes::from(request_string))
-            .unwrap();
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         Ok(resp)
     }
@@ -191,7 +194,7 @@ mod safe {
             .status(StatusCode::OK)
             .header(ALLOW, allowed_methods)
             .body(vec![]) // Empty body for OPTIONS
-            .unwrap();
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         Ok(resp)
     }
@@ -199,8 +202,14 @@ mod safe {
 
 mod not_safe {
     use super::*;
-    pub fn post(req: &Request<String>) -> Result<Response<Bytes>, StatusCode> {
-        let path = &format!("src{}", req.uri().path());
+    use crate::server::get_route;
+    use crate::server::path::add_root_to_path;
+    pub fn post(
+        req: &Request<String>,
+        config: &ServerConfig,
+    ) -> Result<Response<Bytes>, StatusCode> {
+        let route = &get_route(req, config).unwrap();
+        let path = &add_root_to_path(route, req.uri());
         let body = req.body().as_bytes().to_vec();
 
         let resp = Response::builder()
@@ -209,13 +218,16 @@ mod not_safe {
             .header(CONTENT_TYPE, content_type(path))
             .header(CONTENT_LENGTH, body.len())
             .body(body.clone())
-            .unwrap();
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         // Resource does not exist, so create it.
         if fs::metadata(path).is_err() {
             return match fs::write(path, body) {
                 Ok(_) => Ok(resp),
-                Err(_) => Err(StatusCode::BAD_REQUEST),
+                Err(e) => {
+                    log!(LogFileType::Server, format!("Error: {e}"));
+                    Err(StatusCode::BAD_REQUEST)
+                }
             };
         }
 
@@ -233,25 +245,27 @@ mod not_safe {
 
         match fs::write(&path, body) {
             Ok(_) => Ok(resp),
-            Err(_) => {
-                log!(
-                    LogFileType::Server,
-                    format!("Error: Bad request {:?}", &req)
-                );
+            Err(e) => {
+                log!(LogFileType::Server, format!("Error: {e}"));
                 Err(StatusCode::BAD_REQUEST)
             }
         }
     }
 
-    pub fn put(req: &Request<String>) -> Result<Response<Bytes>, StatusCode> {
-        let path = &format!("src{}", req.uri().path());
+    pub fn put(
+        req: &Request<String>,
+        config: &ServerConfig,
+    ) -> Result<Response<Bytes>, StatusCode> {
+        let route = &get_route(req, config).unwrap();
+        let path = &add_root_to_path(route, req.uri());
         let bytes = req.body().as_bytes().to_vec();
+
         let resp = Response::builder()
             .status(StatusCode::OK)
             .header(CONTENT_TYPE, content_type(path))
             .header(CONTENT_LENGTH, bytes.len())
             .body(bytes.clone())
-            .unwrap();
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         match fs::write(path, bytes) {
             Ok(_) => Ok(resp),
@@ -265,15 +279,20 @@ mod not_safe {
         }
     }
 
-    pub fn patch(req: &Request<String>) -> Result<Response<Bytes>, StatusCode> {
-        let path = &format!("src{}", req.uri().path());
+    pub fn patch(
+        req: &Request<String>,
+        config: &ServerConfig,
+    ) -> Result<Response<Bytes>, StatusCode> {
+        let route = &get_route(req, config).unwrap();
+        let path = &add_root_to_path(route, req.uri());
         let bytes = req.body().as_bytes().to_vec();
+
         let resp = Response::builder()
             .status(StatusCode::OK)
             .header(CONTENT_TYPE, content_type(path))
             .header(CONTENT_LENGTH, bytes.len())
             .body(bytes.clone())
-            .unwrap();
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         match fs::metadata(path) {
             Ok(_) => match fs::write(path, bytes) {
@@ -296,9 +315,13 @@ mod not_safe {
         }
     }
 
-    pub fn delete(req: &Request<String>) -> Result<Response<Bytes>, StatusCode> {
-        let path = &format!("src{}", req.uri().path());
-        let body = match fs::read(format!("src{path}")) {
+    pub fn delete(
+        req: &Request<String>,
+        config: &ServerConfig,
+    ) -> Result<Response<Bytes>, StatusCode> {
+        let route = &get_route(req, config).unwrap();
+        let path = &add_root_to_path(route, req.uri());
+        let body = match fs::read(path) {
             Ok(bytes) => bytes,
             Err(_) => {
                 log!(
@@ -308,12 +331,13 @@ mod not_safe {
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         };
+
         let resp = Response::builder()
             .status(StatusCode::OK)
             .header(CONTENT_TYPE, content_type(path))
             .header(CONTENT_LENGTH, body.len())
             .body(body)
-            .unwrap();
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         match fs::remove_file(path) {
             Ok(_) => Ok(resp),

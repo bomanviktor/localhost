@@ -28,7 +28,12 @@ pub fn get_route<'a>(
     // Check if it is a redirect
     if let Some(settings) = &route.settings {
         if is_redirect(url_path, &settings.http_redirections) {
-            return Err((settings.redirect_status_code, routed_path.to_string()));
+            return Err((
+                settings
+                    .redirect_status_code
+                    .unwrap_or(StatusCode::TEMPORARY_REDIRECT),
+                routed_path.to_string(),
+            ));
         }
     }
 
