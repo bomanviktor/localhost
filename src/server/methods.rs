@@ -121,6 +121,7 @@ pub mod safe {
         }
     }
 
+    //similar to get but without the body
     pub fn head(
         req: &Request<String>,
         config: &ServerConfig,
@@ -150,6 +151,7 @@ pub mod safe {
         Ok(resp)
     }
 
+    //sends the request back to the client
     pub fn trace(
         req: &Request<String>,
         config: &ServerConfig,
@@ -193,6 +195,7 @@ pub mod safe {
         Ok(resp)
     }
 
+    //serves the available methods
     pub fn options(
         route: &Route,
         req: &Request<String>,
@@ -218,9 +221,13 @@ pub mod safe {
 }
 
 mod not_safe {
+    use std::path::Path;
+
     use super::*;
     use crate::server::get_route;
     use crate::server::path::add_root_to_path;
+
+    //submit data
     pub fn post(
         req: &Request<String>,
         config: &ServerConfig,
@@ -269,6 +276,7 @@ mod not_safe {
         }
     }
 
+    //create or replace data
     pub fn put(
         req: &Request<String>,
         config: &ServerConfig,
@@ -296,6 +304,7 @@ mod not_safe {
         }
     }
 
+    //update data partially
     pub fn patch(
         req: &Request<String>,
         config: &ServerConfig,
@@ -338,6 +347,16 @@ mod not_safe {
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
         let path = &add_root_to_path(route, req.uri().path());
+
+        // Check if the file exists before attempting to read it
+        if !Path::new(path).exists() {
+            log!(
+                LogFileType::Server,
+                format!("Error: File not found {:?}", &req)
+            );
+            return Err(StatusCode::NOT_FOUND);
+        }
+
         let body = match fs::read(path) {
             Ok(bytes) => bytes,
             Err(_) => {
