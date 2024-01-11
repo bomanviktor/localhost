@@ -1,3 +1,4 @@
+use std::thread;
 use localhost::log::init_logs;
 use localhost::server::{content_type, servers, start};
 use reqwest::blocking::Client;
@@ -7,6 +8,9 @@ use std::io::Read;
 pub fn setup() {
     std::env::set_var("RUNNING_TESTS", "true");
     init_logs();
+    thread::spawn(move || {
+        start(servers());
+    });
     start(servers());
 }
 

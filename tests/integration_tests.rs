@@ -3,6 +3,19 @@ use common::setup;
 use reqwest;
 
 mod common;
+
+#[macro_use]
+extern crate lazy_static;
+
+use std::sync::Mutex;
+
+lazy_static! {
+    static ref TEST_SERVER: Mutex<()> = {
+        let _lock = Mutex::new(());
+        setup();
+        _lock
+    };
+}
 mod test_config {
     use localhost::server_config::server_config;
     #[test]
@@ -119,7 +132,8 @@ mod chunked_encoding {
         use super::*;
         #[test]
         fn valid() {
-            thread::spawn(setup);
+            // This line ensures that the setup function is called once and only once
+            let _ = *TEST_SERVER.lock().unwrap();
 
             let body = "Wiki\r\npedia\r\n in\r\n\r\nchunks.\r\n\r\n";
 
@@ -199,5 +213,32 @@ mod sessions_tests {
             assert_eq!(result.status(), StatusCode::OK);
             assert!(!result.headers().contains_key(COOKIE));
         }
+    }
+}
+
+#[cfg(test)]
+mod integration_tests {
+    use crate::HOST;
+    #[tokio::test]
+    async fn test_validate_cookie_endpoint() {
+        let client = reqwest::Client::new();
+
+        // Sending a request with a cookie
+        let res = client.get(format!("{}/api/get-cookie", HOST))
+            .header("Cookie", "grit:lab-cookie=valid_cookie_value")
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), reqwest::StatusCode::OK);
+
+        // Sending a request without a cookie
+        let res = client.get(format!("{}/api/get-cookie", HOST))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), reqwest::StatusCode::UNAUTHORIZED);
+        // Additional assertions can be added here based on response content
     }
 }
