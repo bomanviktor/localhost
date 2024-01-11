@@ -2,8 +2,10 @@ use crate::log;
 use crate::log::*;
 use crate::server::path::add_root_to_path;
 use crate::server::{get_route, Bytes, ServerConfig, StatusCode};
-use http::header::{CONTENT_LENGTH, CONTENT_TYPE, HOST, TRANSFER_ENCODING};
-use http::{HeaderName, Request, Response};
+use crate::type_aliases::FileExtension;
+use http::header::*;
+use http::{HeaderMap, HeaderName, HeaderValue, Request, Response};
+use std::env;
 use std::process::Command;
 
 #[derive(Clone, Debug)]
@@ -41,7 +43,7 @@ pub enum Cgi {
 }
 
 pub fn is_cgi_request(path: &str) -> bool {
-    path.starts_with("/cgi/") || path.starts_with("./cgi/")
+    path.contains("/cgi/")
 }
 
 const STANDARD_HEADERS: [HeaderName; 1] = [TRANSFER_ENCODING];
@@ -59,12 +61,35 @@ pub fn execute_cgi_script(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let path = add_root_to_path(route, req.uri());
+    let full_path = add_root_to_path(route, req.uri());
     let body = req.body().to_string();
-    let file_extension = path.split('.').rev().collect::<Vec<&str>>()[0].trim_end();
+    let extension = full_path.split('.').rev().collect::<Vec<&str>>()[0].trim_end();
+
+    let mut file_extension = String::new();
+
+    for ch in extension.chars() {
+        if ch.is_alphanumeric() {
+            file_extension.push(ch);
+        } else {
+            break;
+        }
+    }
+
+    let path = full_path
+        .split(&format!(".{file_extension}"))
+        .collect::<Vec<&str>>()[0]
+        .to_string();
+
+    let path = format!("{path}.{file_extension}");
+    add_env_variables(req, config, file_extension.as_str());
 
     // Check if the file extension is associated with a CGI script
-    let (command, arguments) = match settings.cgi_def.clone().unwrap().get(file_extension) {
+    let (command, arguments) = match settings
+        .cgi_def
+        .clone()
+        .unwrap()
+        .get(file_extension.as_str())
+    {
         Some(cgi_type) => match cgi_type {
             Cgi::Ada => ("ada", vec![path, body]),
             Cgi::C => ("./compiled/c_binary", vec![body]), // Replace with actual compiled binary path
@@ -161,5 +186,59 @@ pub fn execute_cgi_script(
     let response = resp
         .body(body)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     Ok(response)
+}
+
+fn add_env_variables(req: &Request<String>, config: &ServerConfig, file_extension: FileExtension) {
+    add_http_variables(req.headers());
+    if let Some(query) = req.uri().query() {
+        env::set_var("QUERY_STRING", query);
+    }
+
+    env::set_var("REQUEST_METHOD", req.method().to_string());
+    env::set_var("SERVER_NAME", config.host);
+
+    if let Some(port) = req.uri().port_u16() {
+        env::set_var("SERVER_PORT", format!("{port}"));
+    }
+
+    env::set_var("SERVER_SOFTWARE", "Rust v1.74.0");
+
+    let path = req
+        .uri()
+        .path()
+        .split(file_extension)
+        .collect::<Vec<&str>>();
+
+    // localhost:8080/cgi/python.py/path/to/file -> PATH_INFO: /path/to/file
+    if contains_path_info(path.clone()) {
+        env::set_var("PATH_INFO", path[1]);
+    }
+}
+fn add_http_variables(headers: &HeaderMap<HeaderValue>) {
+    for (key, v) in headers {
+        let value = v.to_str().unwrap_or_default();
+        if value.is_empty() {
+            continue;
+        }
+        match *key {
+            ACCEPT => env::set_var("HTTP_ACCEPT", value),
+            CONTENT_LENGTH => env::set_var("CONTENT_LENGTH", value),
+            CONTENT_TYPE => env::set_var("CONTENT_TYPE", value),
+            ACCEPT_CHARSET => env::set_var("HTTP_ACCEPT_CHARSET", value),
+            ACCEPT_ENCODING => env::set_var("HTTP_ACCEPT_ENCODING", value),
+            ACCEPT_LANGUAGE => env::set_var("HTTP_ACCEPT_LANGUAGE", value),
+            FORWARDED => env::set_var("HTTP_FORWARDED", value),
+            HOST => env::set_var("HTTP_HOST", value),
+            PROXY_AUTHORIZATION => env::set_var("HTTP_PROXY_AUTHORIZATION", value),
+            USER_AGENT => env::set_var("HTTP_USER_AGENT", value),
+            COOKIE => env::set_var("COOKIE", value),
+            _ => {}
+        }
+    }
+}
+
+fn contains_path_info(path: Vec<&str>) -> bool {
+    path.len() == 2
 }

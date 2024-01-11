@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use config::route::Settings;
+use std::collections::HashMap;
 
 use crate::server::{update_cookie, validate_cookie, Cgi};
 pub use crate::server_config::*;
@@ -24,7 +23,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 settings: None,
             },
             Route {
-                path: "/cgi/",
+                path: "/cgi",
                 methods: vec![http::Method::GET],
                 handler: None,
                 settings: Some(Settings {
@@ -39,7 +38,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                         ("py", Cgi::Python),
                         ("rb", Cgi::Ruby),
                     ])),
-                    list_directory: false,
+                    list_directory: true,
                 }),
             },
             Route {
