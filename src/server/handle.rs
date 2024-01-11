@@ -115,8 +115,6 @@ fn serve_directory_contents(stream: &mut TcpStream, path: &str) -> io::Result<()
 
             let entry_name = entry_path.file_name().unwrap_or_default().to_string_lossy();
 
-            println!("entry_name: {}", entry_name);
-
             acc + &format!(
                 "<li><a href=\"/{}/{}\">{}</a></li>",
                 trimmed_path, relative_path, entry_name
