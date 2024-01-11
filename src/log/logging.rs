@@ -11,29 +11,39 @@ pub enum LogFileType {
 }
 
 const LOG_DIR: &str = "./src/log/log_files/";
+const LOG_DIR_TEST: &str = "./src/log/test_log_files/";
 
 impl LogFileType {
     fn file_path(&self) -> String {
+        let log_dir = if std::env::var("RUNNING_TESTS").is_ok() {
+            LOG_DIR_TEST
+        } else {
+            LOG_DIR
+        };
+
         match self {
-            LogFileType::Server => format!("{LOG_DIR}server.log"),
-            LogFileType::Client => format!("{LOG_DIR}client.log"),
+            LogFileType::Server => format!("{log_dir}server.log"),
+            LogFileType::Client => format!("{log_dir}client.log"),
         }
     }
 }
 pub fn init_logs() {
     let _ = fs::create_dir(LOG_DIR);
+    let _ = fs::create_dir(LOG_DIR_TEST);
     let files = [LogFileType::Server, LogFileType::Client];
 
     for file_type in &files {
         let file_path = file_type.file_path();
         let path = Path::new(&file_path);
 
-        if path.exists() {
+        if path.exists() && file_path == LOG_DIR.to_string() + "server.log" {
             let now = Local::now();
             let timestamp = now.format("%Y-%m-%d-%H:%M:%S").to_string();
             let new_file_name = format!("{}-{}.log", file_path.trim_end_matches(".log"), timestamp);
 
             fs::rename(file_path, &new_file_name).expect("Unable to rename file");
+        } else {
+            fs::File::create(file_path).expect("Unable to create file");
         }
     }
 }

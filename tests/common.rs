@@ -5,6 +5,7 @@ use reqwest::header::CONTENT_TYPE;
 use std::fs::File;
 use std::io::Read;
 pub fn setup() {
+    std::env::set_var("RUNNING_TESTS", "true");
     init_logs();
     start(servers());
 }

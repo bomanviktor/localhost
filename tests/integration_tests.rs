@@ -114,6 +114,7 @@ mod chunked_encoding {
         fn invalid() {}
     }
 
+    #[cfg(test)]
     mod post {
         use super::*;
         #[test]
@@ -157,13 +158,12 @@ mod test_requests {
     }
 }
 
-
 #[cfg(test)]
 mod sessions_tests {
-    use http::{HeaderValue, Request, StatusCode};
-    use std::collections::HashMap;
     use http::header::COOKIE;
+    use http::{HeaderValue, Request, StatusCode};
     use localhost::server::update_cookie;
+    use std::collections::HashMap;
 
     #[test]
     fn test_update_cookie_existing() {
@@ -177,6 +177,22 @@ mod sessions_tests {
             .header(COOKIE, "existing_cookie_value")
             .body(String::new())
             .unwrap();
+
+        for config in configs {
+            let result = update_cookie(&req, &config).unwrap();
+            assert_eq!(result.status(), StatusCode::OK);
+            assert!(!result.headers().contains_key(COOKIE));
+        }
+    }
+
+    #[test]
+    fn test_update_cookie_non_existing() {
+        use localhost::server_config::server_config;
+        let configs = server_config();
+        let mut headers = HashMap::new();
+        headers.insert(COOKIE, HeaderValue::from_static("grit:lab-cookie"));
+
+        let req = Request::builder().uri("/test").body(String::new()).unwrap();
 
         for config in configs {
             let result = update_cookie(&req, &config).unwrap();
