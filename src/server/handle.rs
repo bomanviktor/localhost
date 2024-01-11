@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::Path;
 
 use crate::log;
 use crate::log::*;
@@ -93,7 +94,11 @@ pub fn serve_response(stream: &mut TcpStream, response: Response<Bytes>) -> io::
 }
 
 fn serve_directory_contents(stream: &mut TcpStream, path: &str) -> io::Result<()> {
-    let entries = fs::read_dir(path)
+    // Ensure the path doesn't end with a slash
+    let trimmed_path = path.trim_end_matches('/');
+
+    let base_path = Path::new(trimmed_path);
+    let entries = fs::read_dir(base_path)
         .map_err(|_| io::Error::new(io::ErrorKind::NotFound, "Directory not found"))?
         .map(|res| res.map(|e| e.path()))
         .collect::<Result<Vec<_>, io::Error>>()?;
@@ -101,20 +106,18 @@ fn serve_directory_contents(stream: &mut TcpStream, path: &str) -> io::Result<()
     let body = format!(
         "<html><body><ul>{}</ul></body></html>",
         entries.into_iter().fold(String::new(), |acc, entry_path| {
-            // Construct the relative path
+            // Construct the relative path from the base path
             let relative_path = entry_path
-                .strip_prefix(path)
+                .strip_prefix(base_path)
                 .unwrap_or(&entry_path)
                 .display()
-                .to_string()
-                .trim_start_matches('/')
                 .to_string();
 
             let entry_name = entry_path.file_name().unwrap_or_default().to_string_lossy();
 
             acc + &format!(
-                "<li><a href=\"/files/{}\">{}</a></li>",
-                relative_path, entry_name
+                "<li><a href=\"/{}/{}\">{}</a></li>",
+                trimmed_path, relative_path, entry_name
             )
         })
     );
