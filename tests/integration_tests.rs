@@ -103,15 +103,15 @@ mod binary_file {
 
 mod chunked_encoding {
     use super::*;
-    use reqwest::blocking::Client;
     use reqwest::header::{CONTENT_TYPE, TRANSFER_ENCODING};
+    use reqwest::Client;
 
-    fn send_chunked_request(
+    async fn send_chunked_request(
         client: &Client,
         url: &str,
         body: &'static str,
         method: http::Method,
-    ) -> reqwest::blocking::Response {
+    ) -> reqwest::Response {
         let mut request_builder = match method {
             http::Method::POST => client.post(url),
             http::Method::GET => client.get(url),
@@ -123,7 +123,7 @@ mod chunked_encoding {
             .header(TRANSFER_ENCODING, "chunked")
             .body(body);
 
-        let response = request_builder.send().unwrap();
+        let response = request_builder.send().await.unwrap();
         response
     }
 
@@ -132,23 +132,13 @@ mod chunked_encoding {
         use super::*;
         use crate::HOST;
 
-        #[test]
-        fn chunk_test() {
-            let body = "Wiki\r\npedia\r\n in\r\n\r\nchunks.\r\n\r\n";
-
-            let client = Client::new();
-
-            let valid_endpoint = "/files";
-
-            let response = send_chunked_request(
-                &client,
-                &format!("{HOST}{valid_endpoint}"),
-                body,
-                http::Method::GET,
-            );
-
-            // Check the response status and body
-            assert_eq!(response.status(), reqwest::StatusCode::OK);
+        #[tokio::test]
+        async fn chunk_test() {
+            let client = reqwest::Client::new();
+            let body = "aaljsdglsljsh";
+            let formatted_url = format!("{HOST}/test");
+            let response = send_chunked_request(&client, &formatted_url, body, http::Method::POST);
+            assert_eq!(response.await.status(), reqwest::StatusCode::OK);
         }
 
         #[tokio::test]
@@ -287,5 +277,34 @@ mod sessions_unit_tests {
             assert_eq!(result.status(), StatusCode::OK);
             assert!(!result.headers().contains_key(COOKIE));
         }
+    }
+}
+
+#[cfg(test)]
+mod integration_tests {
+    use crate::HOST;
+    #[tokio::test]
+    async fn test_validate_cookie_endpoint() {
+        let client = reqwest::Client::new();
+
+        // Sending a request with a cookie
+        let res = client
+            .get(format!("{}/api/get-cookie", HOST))
+            .header("Cookie", "grit:lab-cookie=valid_cookie_value")
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), reqwest::StatusCode::OK);
+
+        // Sending a request without a cookie
+        let res = client
+            .get(format!("{}/api/get-cookie", HOST))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), reqwest::StatusCode::UNAUTHORIZED);
+        // Additional assertions can be added here based on response content
     }
 }
