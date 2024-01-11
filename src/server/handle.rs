@@ -49,8 +49,6 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
         }
     };
 
-
-
     // Use the routes' handler
     if let Some(handler) = route.handler {
         return match handler(&request, config) {
@@ -109,7 +107,8 @@ fn serve_directory_contents(stream: &mut TcpStream, path: &str) -> io::Result<()
         "<html><body><ul>{}</ul></body></html>",
         entries.into_iter().fold(String::new(), |acc, entry_path| {
             // Construct the relative path from the base path
-            let relative_path = entry_path.strip_prefix(base_path)
+            let relative_path = entry_path
+                .strip_prefix(base_path)
                 .unwrap_or(&entry_path)
                 .display()
                 .to_string();
@@ -124,7 +123,6 @@ fn serve_directory_contents(stream: &mut TcpStream, path: &str) -> io::Result<()
             )
         })
     );
-
 
     let response = Response::builder()
         .status(StatusCode::OK)
