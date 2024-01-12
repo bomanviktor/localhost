@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::log;
 use crate::log::*;
@@ -61,7 +61,26 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
     }
 
     let path = &add_root_to_path(&route, request.uri());
-    if std::path::Path::new(&path).is_dir() {
+    let mut default_path = PathBuf::from(path);
+
+    // Check if the path is a directory and a default file is specified
+    if Path::new(&path).is_dir() {
+        if let Some(default_file) = &route
+            .settings
+            .as_ref()
+            .and_then(|s| s.default_if_url_is_dir)
+        {
+            if !path.ends_with('/') {
+                default_path.push("/"); // Ensure the path ends with a '/'
+            }
+            default_path.push(default_file); // Append the default file to the path
+
+            println!("default_path: {:?}", default_path);
+            if default_path.exists() {
+                println!("serving: {:?}", default_path);
+                return serve_file(stream, &default_path.to_string_lossy());
+            }
+        }
         return serve_directory_contents(stream, path);
     }
 
@@ -126,6 +145,19 @@ fn serve_directory_contents(stream: &mut TcpStream, path: &str) -> io::Result<()
         .status(StatusCode::OK)
         .header(CONTENT_TYPE, "text/html")
         .body(Bytes::from(body))
+        .unwrap();
+
+    serve_response(stream, response)
+}
+
+fn serve_file(stream: &mut TcpStream, file_path: &str) -> io::Result<()> {
+    let file_contents = fs::read(file_path)
+        .map_err(|_| io::Error::new(io::ErrorKind::NotFound, "File not found"))?;
+
+    let response = Response::builder()
+        .status(StatusCode::OK)
+        .header(CONTENT_TYPE, "text/html") // Adjust content type as necessary
+        .body(Bytes::from(file_contents))
         .unwrap();
 
     serve_response(stream, response)
