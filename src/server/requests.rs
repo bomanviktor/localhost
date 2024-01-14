@@ -139,7 +139,6 @@ pub mod path {
     use super::*;
     use crate::server::utils::{get_line, get_split_index};
     use crate::type_aliases::Path;
-    use http::Uri;
 
     /// `path` gets the path from the `request`
     pub fn get_path(req: &str) -> &str {
@@ -189,12 +188,12 @@ pub mod path {
         }
     }
 
-    pub fn add_root_to_path(route: &Route, uri: &Uri) -> String {
+    pub fn add_root_to_path(route: &Route, path: &str) -> String {
         if let Some(settings) = &route.settings {
             let root = settings.root_path.unwrap_or(".");
-            format!("{root}{}", uri.path())
+            format!("{root}{path}")
         } else {
-            uri.path().to_string()
+            path.to_string()
         }
     }
 }

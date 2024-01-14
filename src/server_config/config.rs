@@ -63,21 +63,35 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                     http_redirections: None,
                     redirect_status_code: None,
                     root_path: None,
-                    default_if_url_is_dir: Some("dir.html"),
+                    default_if_url_is_dir: Some("/dir.html"),
                     default_if_request_is_dir: None,
                     cgi_def: None,
                     list_directory: false,
                 }),
             },
             Route {
-                path: "/files/default_dir_file_test", // this does allow ./files/* to be accessed
+                path: "/", // this does allow ./files/* to be accessed
                 methods: vec![http::Method::GET],
                 handler: None,
                 settings: Some(Settings {
                     http_redirections: None,
                     redirect_status_code: None,
                     root_path: None,
-                    default_if_url_is_dir: Some("dir.html"),
+                    default_if_url_is_dir: Some("/dir.html"),
+                    default_if_request_is_dir: None,
+                    cgi_def: None,
+                    list_directory: true,
+                }),
+            },
+            Route {
+                path: "/files/default_dir_file_test", // This path points towards a directory not yet existing.
+                methods: vec![http::Method::GET],
+                handler: None,
+                settings: Some(Settings {
+                    http_redirections: None,
+                    redirect_status_code: None,
+                    root_path: None,
+                    default_if_url_is_dir: Some("/dir.html"),
                     default_if_request_is_dir: None,
                     cgi_def: None,
                     list_directory: false,

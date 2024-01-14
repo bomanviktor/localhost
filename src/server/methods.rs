@@ -56,7 +56,7 @@ pub fn handle_method(
     Ok(resp)
 }
 
-mod safe {
+pub mod safe {
     use super::*;
     use crate::server::get_route;
     use crate::server::path::add_root_to_path;
@@ -73,7 +73,7 @@ mod safe {
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, req.uri());
+        let path = &add_root_to_path(route, req.uri().path());
         let body = match fs::read(path) {
             Ok(bytes) => bytes,
             Err(_) => {
@@ -109,7 +109,7 @@ mod safe {
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, req.uri());
+        let path = &add_root_to_path(route, req.uri().path());
         let metadata = match fs::metadata(path) {
             Ok(metadata) => metadata,
             Err(_) => {
@@ -209,7 +209,7 @@ mod not_safe {
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, req.uri());
+        let path = &add_root_to_path(route, req.uri().path());
         let body = req.body().as_bytes().to_vec();
 
         let resp = Response::builder()
@@ -257,7 +257,7 @@ mod not_safe {
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, req.uri());
+        let path = &add_root_to_path(route, req.uri().path());
         let bytes = req.body().as_bytes().to_vec();
 
         let resp = Response::builder()
@@ -284,7 +284,7 @@ mod not_safe {
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, req.uri());
+        let path = &add_root_to_path(route, req.uri().path());
         let bytes = req.body().as_bytes().to_vec();
 
         let resp = Response::builder()
@@ -320,7 +320,7 @@ mod not_safe {
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, req.uri());
+        let path = &add_root_to_path(route, req.uri().path());
         let body = match fs::read(path) {
             Ok(bytes) => bytes,
             Err(_) => {

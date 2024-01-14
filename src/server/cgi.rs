@@ -61,7 +61,7 @@ pub fn execute_cgi_script(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let full_path = add_root_to_path(route, req.uri());
+    let full_path = add_root_to_path(route, req.uri().path());
     let body = req.body().to_string();
     let extension = full_path.split('.').rev().collect::<Vec<&str>>()[0].trim_end();
 
