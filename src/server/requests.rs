@@ -147,7 +147,9 @@ pub mod path {
                 continue;
             }
 
-            if path_str.is_empty() || route.path.len() < path_str.len() {
+            // Sort the routes by length. More specified routes are prioritized
+            // Example: "/foo" and "/foo/bar" both match "/foo/bar/baz". This will take the "/foo/bar" route.
+            if path_str.is_empty() || route.path.len() > path_str.len() {
                 path_str = route.path;
                 index = i;
             }
