@@ -7,11 +7,17 @@ use http::header::{ALLOW, CONTENT_LENGTH, CONTENT_TYPE, HOST};
 use std::fs;
 use std::str::FromStr;
 
-pub fn get_method(req: &str) -> Result<Method, http::method::InvalidMethod> {
+pub fn get_method(req: &str) -> Result<Method, StatusCode> {
     let line = get_line(req, 0);
     let method = get_split_index(line, 0);
     // "GET /path2 HTTP/1.1" -> "GET"
-    Method::from_str(method)
+    match Method::from_str(method) {
+        Ok(method) => Ok(method),
+        Err(e) => {
+            log!(LogFileType::Server, format!("Error: {e}"));
+            Err(StatusCode::BAD_REQUEST)
+        }
+    }
 }
 
 pub fn method_is_allowed(method: &Method, route: &Route) -> bool {

@@ -11,7 +11,7 @@ use crate::server::*;
 use serve::*;
 
 pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Result<()> {
-    let mut buffer = [0; 10024];
+    let mut buffer = [0; 1024];
 
     // Read from stream
     let bytes_read = stream.read(&mut buffer)?;
@@ -66,10 +66,12 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
     if Path::new(&path).is_dir() && route.settings.is_some() {
         let settings = route.settings.as_ref().unwrap();
 
-        // Serve the default file. Error handling is inside the `get` function
+        // Serve the default file if enabled in config
         if let Some(default_file) = settings.default_if_url_is_dir {
             let default_path = &add_root_to_path(&route, default_file);
-            let request_string = request_string.replacen(&path[1..], &default_path[1..], 1);
+            let request_string =
+                replace_path_in_request(&request_string, request.uri().path(), default_path);
+
             let request = match get_request(config, &request_string) {
                 Ok(r) => r,
                 Err(code) => {
@@ -77,10 +79,14 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
                     return serve_response(stream, error(code, config));
                 }
             };
-            return serve_response(stream, get(&request, config).unwrap());
+
+            return match get(&request, config) {
+                Ok(resp) => serve_response(stream, resp),
+                Err(e) => serve_response(stream, error(e, config)),
+            };
         }
 
-        // List directory setting is enabled. List the directory.
+        // List directory setting is enabled. Default file is disabled.
         return if settings.list_directory {
             serve_directory_contents(stream, path)
         } else {
@@ -108,6 +114,14 @@ pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Resul
     }
 }
 
+fn replace_path_in_request(req_string: &str, path: &str, default_path: &str) -> String {
+    return if let Some(stripped_path) = path.strip_prefix('.') {
+        req_string.replacen(stripped_path, &default_path[1..], 1)
+    } else {
+        req_string.replacen(path, &default_path[1..], 1)
+    };
+}
+
 mod serve {
     use crate::server::{content_type, format_response};
     use crate::type_aliases::Bytes;
@@ -120,7 +134,7 @@ mod serve {
 
     pub fn serve_response(stream: &mut TcpStream, response: Response<Bytes>) -> io::Result<()> {
         unsafe {
-            stream.write_all(&format_response(response))?;
+            stream.write_all(&format_response(response.clone()))?;
         }
         stream.flush()
     }
@@ -169,7 +183,7 @@ mod serve {
     /// Serve a file located at `file_path`
     #[allow(dead_code)]
     pub fn serve_file(stream: &mut TcpStream, file_path: &str) -> io::Result<()> {
-        let kek = format!(".{file_path}");
+        let kek = format!(".{file_path}"); // kek
         let file_contents =
             fs::read(kek).map_err(|_| io::Error::new(io::ErrorKind::NotFound, "File not found"))?;
 

@@ -5,7 +5,7 @@ use crate::server::{update_cookie, validate_cookie, Cgi};
 pub use crate::server_config::*;
 pub fn server_config() -> Vec<ServerConfig<'static>> {
     vec![ServerConfig {
-        host: "0.0.0.0",
+        host: "127.0.0.1",
         ports: vec![8080, 8081, 8082],
         default_error_path: None,
         body_size_limit: 10024,
@@ -48,7 +48,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 settings: Some(Settings {
                     http_redirections: None,
                     redirect_status_code: None,
-                    root_path: Some("./files"),
+                    root_path: Some("/files"),
                     default_if_url_is_dir: None,
                     default_if_request_is_dir: None,
                     cgi_def: None,
@@ -56,13 +56,13 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 }),
             },
             Route {
-                path: "/files", // this does allow ./files/* to be accessed
+                path: "/mega-dir", // this does allow ./files/* to be accessed
                 methods: vec![http::Method::GET],
                 handler: None,
                 settings: Some(Settings {
                     http_redirections: None,
                     redirect_status_code: None,
-                    root_path: None,
+                    root_path: Some("/files"),
                     default_if_url_is_dir: Some("/dir.html"),
                     default_if_request_is_dir: None,
                     cgi_def: None,
@@ -70,7 +70,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 }),
             },
             Route {
-                path: "/", // this does allow ./files/* to be accessed
+                path: "/",
                 methods: vec![http::Method::GET],
                 handler: None,
                 settings: Some(Settings {
@@ -81,20 +81,6 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                     default_if_request_is_dir: None,
                     cgi_def: None,
                     list_directory: true,
-                }),
-            },
-            Route {
-                path: "/files/default_dir_file_test", // This path points towards a directory not yet existing.
-                methods: vec![http::Method::GET],
-                handler: None,
-                settings: Some(Settings {
-                    http_redirections: None,
-                    redirect_status_code: None,
-                    root_path: None,
-                    default_if_url_is_dir: Some("/dir.html"),
-                    default_if_request_is_dir: None,
-                    cgi_def: None,
-                    list_directory: false,
                 }),
             },
         ],
