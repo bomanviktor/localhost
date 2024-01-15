@@ -4,10 +4,10 @@ use reqwest;
 
 mod common;
 
-#[macro_use]
 extern crate lazy_static;
 
 use std::sync::Mutex;
+use lazy_static::lazy_static;
 
 lazy_static! {
     static ref TEST_SERVER: Mutex<()> = {
@@ -16,6 +16,17 @@ lazy_static! {
         _lock
     };
 }
+
+mod test_server {
+    use super::*;
+    #[test]
+    fn server() {
+        // This line ensures that the setup function is called once and only once
+        let _ = *TEST_SERVER.lock().unwrap();
+    }
+}
+
+
 mod test_config {
     use localhost::server_config::server_config;
     #[test]
@@ -119,26 +130,86 @@ mod chunked_encoding {
         response
     }
 
-    mod get {
-        #[test]
-        fn valid() {}
 
-        #[test]
-        fn invalid() {}
+    #[cfg(test)]
+    mod get {
+        use crate::HOST;
+
+        #[tokio::test]
+        async fn valid() {
+            let client = reqwest::Client::new();
+
+            // Test: Sending a request with a cookie
+            let res = client.get(format!("{}/api/get-cookie", HOST))
+                .header("Cookie", "grit:lab-cookie=valid_cookie_value")
+                .send()
+                .await
+                .unwrap();
+
+            assert_eq!(res.status(), reqwest::StatusCode::OK);
+
+            // Test: Sending request to valid endpoint /test
+            let res = client.get(format!("{}/test", HOST))
+                .header("Cookie", "grit:lab-cookie=invalid_cookie_value")
+                .send()
+                .await
+                .unwrap();
+
+            assert_eq!(res.status(), reqwest::StatusCode::OK);
+        }
+
+        #[tokio::test]
+        async fn invalid() {
+            let client = reqwest::Client::new();
+
+            // Test: Sending request to invalid endpoint /wrong-path
+            let res = client.get(format!("{}/wrong-path", HOST))
+                .header("Cookie", "grit:lab-cookie=invalid_cookie_value")
+                .send()
+                .await
+                .unwrap();
+
+            assert_eq!(res.status(), reqwest::StatusCode::NOT_FOUND);
+
+            // Sending a request without a cookie
+            let res = client.get(format!("{}/api/get-cookie", HOST))
+                .send()
+                .await
+                .unwrap();
+
+            assert_eq!(res.status(), reqwest::StatusCode::UNAUTHORIZED);
+
+            // Test: Send request with with body exceeding 10024 bytes
+            //Body with size larger than 10024 bytes
+            let mut body = String::from("a");
+            for _ in 0..20000 {
+                body.push('a');
+            }
+
+            println!("Body length is {}", body.len());
+
+            let res = client.get(format!("{}/test", HOST))
+                .header("Cookie", "grit:lab-cookie=invalid_cookie_value")
+                .body(body)
+                .send()
+                .await
+                .unwrap();
+
+            assert_eq!(res.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
+        }
     }
 
     #[cfg(test)]
     mod post {
         use super::*;
+
         #[test]
         fn valid() {
-            // This line ensures that the setup function is called once and only once
-            let _ = *TEST_SERVER.lock().unwrap();
-
             let body = "Wiki\r\npedia\r\n in\r\n\r\nchunks.\r\n\r\n";
 
             let client = Client::new();
-            let valid_endpoint = "/test.txt";
+
+            let valid_endpoint = "/test";
 
             let response = send_chunked_request(
                 &client,
@@ -156,6 +227,7 @@ mod chunked_encoding {
         fn invalid() {}
     }
 }
+
 
 #[allow(dead_code)]
 mod test_requests {
@@ -213,32 +285,5 @@ mod sessions_tests {
             assert_eq!(result.status(), StatusCode::OK);
             assert!(!result.headers().contains_key(COOKIE));
         }
-    }
-}
-
-#[cfg(test)]
-mod integration_tests {
-    use crate::HOST;
-    #[tokio::test]
-    async fn test_validate_cookie_endpoint() {
-        let client = reqwest::Client::new();
-
-        // Sending a request with a cookie
-        let res = client.get(format!("{}/api/get-cookie", HOST))
-            .header("Cookie", "grit:lab-cookie=valid_cookie_value")
-            .send()
-            .await
-            .unwrap();
-
-        assert_eq!(res.status(), reqwest::StatusCode::OK);
-
-        // Sending a request without a cookie
-        let res = client.get(format!("{}/api/get-cookie", HOST))
-            .send()
-            .await
-            .unwrap();
-
-        assert_eq!(res.status(), reqwest::StatusCode::UNAUTHORIZED);
-        // Additional assertions can be added here based on response content
     }
 }
