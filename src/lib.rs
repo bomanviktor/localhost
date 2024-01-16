@@ -1,53 +1,66 @@
+// Type aliases module
 pub mod type_aliases {
     pub type Port = u16;
     pub type Bytes = Vec<u8>;
-    pub type Path<'a> = &'a str;
-    pub type FileExtension<'a> = &'a str;
+    pub type Path = String;
+    pub type FileExtension = String;
 }
+
+// Server configuration module
 pub mod server_config {
     pub mod config;
-    pub use config::*;
+    use std::fs;
 
     use crate::server_config::route::Route;
-    use crate::type_aliases::{Path, Port};
+    use crate::type_aliases::Port;
+    pub use config::*;
+    use serde::Deserialize;
 
-    #[derive(Clone, Debug)]
-    pub struct ServerConfig<'a> {
-        pub host: &'a str,
+    #[derive(Deserialize)]
+    pub struct AppConfig {
+        pub servers: Vec<ServerConfig>,
+    }
+
+    #[derive(Clone, Debug, Deserialize)]
+    pub struct ServerConfig {
+        pub host: String,
         pub ports: Vec<Port>,
-        pub default_error_path: Option<Path<'a>>,
+        pub default_error_path: Option<String>,
         pub body_size_limit: usize,
-        pub routes: Vec<Route<'a>>,
+        pub routes: Vec<Route>,
     }
 
     pub mod route {
-        use crate::server::Cgi;
-        use crate::server_config::ServerConfig;
-        use crate::type_aliases::{Bytes, FileExtension, Path};
-        use http::{Method, Request, Response, StatusCode};
+
+        use serde::Deserialize;
         use std::collections::HashMap;
 
-        pub type HandlerFunc =
-            fn(req: &Request<String>, conf: &ServerConfig) -> Result<Response<Bytes>, StatusCode>;
-
-        #[derive(Clone, Debug)]
-        pub struct Route<'a> {
-            pub url_path: Path<'a>,
-            pub methods: Vec<Method>,
-            pub handler: Option<HandlerFunc>,
-            pub settings: Option<Settings<'a>>,
+        #[derive(Clone, Debug, Deserialize)]
+        pub struct Route {
+            pub url_path: String,
+            pub methods: Vec<String>,
+            pub handler: Option<String>, // Updated to use String
+            pub settings: Option<Settings>,
         }
 
-        #[derive(Clone, Debug)]
-        pub struct Settings<'a> {
-            pub http_redirections: Option<Vec<Path<'a>>>, // From endpoint, to path
-            pub redirect_status_code: Option<StatusCode>,
-            pub root_path: Option<Path<'a>>,
-            pub default_if_url_is_dir: Option<Path<'a>>, // TODO: Implement
-            pub default_if_request_is_dir: Option<Path<'a>>, // TODO: Implement
-            pub cgi_def: Option<HashMap<FileExtension<'a>, Cgi>>,
+        #[derive(Clone, Debug, Deserialize)]
+        pub struct Settings {
+            pub http_redirections: Option<Vec<String>>,
+            pub redirect_status_code: Option<String>,
+            pub root_path: Option<String>,
+            pub default_if_url_is_dir: Option<String>,
+            pub default_if_request_is_dir: Option<String>,
+            pub cgi_def: Option<HashMap<String, String>>, // Updated to use String
             pub list_directory: bool,
         }
+    }
+
+    // Load configuration from TOML file
+    pub fn load_config() -> Vec<ServerConfig> {
+        let config_str = fs::read_to_string("config.toml").expect("Failed to read config.toml");
+        let app_config: AppConfig =
+            toml::from_str(&config_str).expect("Failed to parse config.toml");
+        app_config.servers
     }
 }
 
@@ -74,7 +87,6 @@ pub mod server {
 
     use std::sync::Arc;
     pub mod requests;
-
     pub use requests::*;
     pub mod responses;
     pub use responses::*;
@@ -94,25 +106,25 @@ pub mod server {
     pub use state::*;
 
     #[derive(Debug)]
-    pub struct Server<'a> {
+    pub struct Server {
         pub listeners: Vec<TcpListener>,
-        pub config: ServerConfig<'a>,
+        pub config: ServerConfig,
     }
 
-    impl<'a> Server<'a> {
-        pub fn new(listeners: Vec<TcpListener>, config: ServerConfig<'a>) -> Self {
+    impl Server {
+        pub fn new(listeners: Vec<TcpListener>, config: ServerConfig) -> Self {
             Self { listeners, config }
         }
     }
 
     #[derive(Debug)]
-    pub struct Listener<'a> {
+    pub struct Listener {
         pub listener: TcpListener,
         pub token: Token,
-        pub config: Arc<ServerConfig<'a>>,
+        pub config: Arc<ServerConfig>,
     }
 
-    impl Listener<'_> {
+    impl Listener {
         pub fn accept(&self) -> io::Result<(TcpStream, SocketAddr)> {
             self.listener.accept()
         }

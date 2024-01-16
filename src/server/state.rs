@@ -10,18 +10,18 @@ use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::windows::io::{AsRawSocket, FromRawSocket};
 use std::time::Duration;
 
-pub type Connection<'a> = (TcpStream, Arc<ServerConfig<'a>>);
+pub type Connection<'a> = (TcpStream, Arc<ServerConfig>);
 
-pub struct ServerState<'a> {
+pub struct ServerState {
     pub poll: Poll,
     pub events: Events,
     pub token_id: usize,
-    pub listeners: Vec<Listener<'a>>,
-    pub connections: HashMap<Token, Connection<'a>>,
+    pub listeners: Vec<Listener>,
+    pub connections: HashMap<Token, Connection<'static>>,
 }
 pub const INITIAL_TOKEN_ID: usize = 0;
-impl ServerState<'_> {
-    pub fn init(servers: Vec<Server<'static>>) -> ServerState<'static> {
+impl ServerState {
+    pub fn init(servers: Vec<Server>) -> ServerState {
         let poll = Poll::new().expect("Failed to create Poll instance");
         let events = Events::with_capacity(4096);
         let mut token_id = INITIAL_TOKEN_ID;
@@ -81,11 +81,11 @@ impl ServerState<'_> {
     }
 }
 
-fn accept_connection<'a>(
+fn accept_connection(
     poll: &Poll,
     token_id: &mut usize,
-    listener: &Listener<'a>,
-    connections: &mut HashMap<Token, (TcpStream, Arc<ServerConfig<'a>>)>,
+    listener: &Listener,
+    connections: &mut HashMap<Token, (TcpStream, Arc<ServerConfig>)>,
 ) -> bool {
     match listener.accept() {
         Ok((mut stream, _)) => {

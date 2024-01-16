@@ -5,8 +5,11 @@ use crate::server::{get_route, Bytes, ServerConfig, StatusCode};
 use crate::type_aliases::FileExtension;
 use http::header::*;
 use http::{HeaderMap, HeaderName, HeaderValue, Request, Response};
+use serde::{self, de, Deserialize, Deserializer};
+use std::collections::HashMap;
 use std::env;
 use std::process::Command;
+use std::str::FromStr;
 
 #[derive(Clone, Debug)]
 pub enum Cgi {
@@ -40,6 +43,56 @@ pub enum Cgi {
     Swift,
     TypeScript,
     Zig,
+}
+
+impl FromStr for Cgi {
+    type Err = serde::de::value::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Ada" => Ok(Cgi::Ada),
+            "C" => Ok(Cgi::C),
+            "CSharp" => Ok(Cgi::CSharp),
+            "Cpp" => Ok(Cgi::Cpp),
+            "D" => Ok(Cgi::D),
+            "Erlang" => Ok(Cgi::Erlang),
+            "Fortran" => Ok(Cgi::Fortran),
+            "Go" => Ok(Cgi::Go),
+            "Groovy" => Ok(Cgi::Groovy),
+            "Haskell" => Ok(Cgi::Haskell),
+            "Java" => Ok(Cgi::Java),
+            "JavaScript" => Ok(Cgi::JavaScript),
+            "Julia" => Ok(Cgi::Julia),
+            "Kotlin" => Ok(Cgi::Kotlin),
+            "Lua" => Ok(Cgi::Lua),
+            "Nim" => Ok(Cgi::Nim),
+            "ObjectiveC" => Ok(Cgi::ObjectiveC),
+            "OCaml" => Ok(Cgi::OCaml),
+            "Pascal" => Ok(Cgi::Pascal),
+            "Perl" => Ok(Cgi::Perl),
+            "PHP" => Ok(Cgi::PHP),
+            "Python" => Ok(Cgi::Python),
+            "R" => Ok(Cgi::R),
+            "Ruby" => Ok(Cgi::Ruby),
+            "Rust" => Ok(Cgi::Rust),
+            "Scala" => Ok(Cgi::Scala),
+            "Shell" => Ok(Cgi::Shell),
+            "Swift" => Ok(Cgi::Swift),
+            "TypeScript" => Ok(Cgi::TypeScript),
+            "Zig" => Ok(Cgi::Zig),
+            _ => Err(de::Error::custom(format!("unknown CGI type: {}", s))),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Cgi {
+    fn deserialize<D>(deserializer: D) -> Result<Cgi, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Cgi::from_str(&s).map_err(serde::de::Error::custom)
+    }
 }
 
 pub fn is_cgi_request(path: &str) -> bool {
@@ -81,26 +134,41 @@ pub fn execute_cgi_script(
         .to_string();
 
     let path = format!("{path}.{file_extension}");
-    add_env_variables(req, config, file_extension.as_str());
+
+    let file_extension_clone = file_extension.clone();
 
     // Check if the file extension is associated with a CGI script
-    let (command, arguments) = match settings
+    let cgi_map = settings
         .cgi_def
-        .clone()
-        .unwrap()
-        .get(file_extension.as_str())
-    {
+        .as_ref()
+        .map(|map| {
+            map.iter()
+                .filter_map(|(ext, cgi_string)| {
+                    if let Ok(cgi_enum) = Cgi::from_str(cgi_string) {
+                        Some((ext.clone(), cgi_enum))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<HashMap<String, Cgi>>()
+        })
+        .unwrap_or_default();
+
+    let (command, arguments) = match cgi_map.get(&file_extension_clone) {
         Some(cgi_type) => match cgi_type {
-            Cgi::Ada => ("ada", vec![path, body]),
-            Cgi::C => ("./compiled/c_binary", vec![body]), // Replace with actual compiled binary path
-            Cgi::CSharp => ("dotnet", vec![path, body]), // Replace with actual compiled binary path
-            Cgi::Cpp => ("./compiled/cpp_binary", vec![body]), // Replace with actual compiled binary path
-            Cgi::D => ("dmd", vec![path, body]),
-            Cgi::Erlang => ("escript", vec![path, body]),
-            Cgi::Fortran => ("gfortran", vec![path, body]),
-            Cgi::Go => ("go", vec!["run".to_string(), path, body]), // Replace with actual Go run command
-            Cgi::Groovy => ("groovy", vec![path, body]),
-            Cgi::Haskell => ("runhaskell", vec![path, body]),
+            Cgi::Ada => ("ada", vec![full_path.clone(), body.clone()]),
+            Cgi::C => ("./compiled/c_binary", vec![body.clone()]),
+            Cgi::CSharp => ("dotnet", vec![full_path.clone(), body.clone()]),
+            Cgi::Cpp => ("./compiled/cpp_binary", vec![body.clone()]),
+            Cgi::D => ("dmd", vec![full_path.clone(), body.clone()]),
+            Cgi::Erlang => ("escript", vec![full_path.clone(), body.clone()]),
+            Cgi::Fortran => ("gfortran", vec![full_path.clone(), body.clone()]),
+            Cgi::Go => (
+                "go",
+                vec!["run".to_string(), full_path.clone(), body.clone()],
+            ),
+            Cgi::Groovy => ("groovy", vec![full_path.clone(), body.clone()]),
+            Cgi::Haskell => ("runhaskell", vec![full_path.clone(), body.clone()]),
             Cgi::Java => (
                 "java",
                 vec![
@@ -108,46 +176,42 @@ pub fn execute_cgi_script(
                     "compiled".to_string(),
                     "Main".to_string(),
                 ],
-            ), // Replace with actual compiled class path and main class
-            Cgi::JavaScript => ("node", vec![path, body]),
-            Cgi::Julia => ("julia", vec![path, body]),
+            ),
+            Cgi::JavaScript => ("node", vec![full_path.clone(), body.clone()]),
+            Cgi::Julia => ("julia", vec![full_path.clone(), body.clone()]),
             Cgi::Kotlin => (
                 "kotlin",
                 vec![
                     "-cp".to_string(),
                     "compiled".to_string(),
                     "MainKt".to_string(),
-                    body,
+                    body.clone(),
                 ],
-            ), // Replace with actual compiled class path and main class
-            Cgi::Lua => ("lua", vec![path, body]),
+            ),
+            Cgi::Lua => ("lua", vec![full_path.clone(), body.clone()]),
             Cgi::Nim => (
                 "nim",
-                vec!["c".to_string(), "--run".to_string(), path, body],
-            ),
-            Cgi::ObjectiveC => ("./compiled/objc_binary", vec![body]), // Replace with actual compiled binary path
-            Cgi::OCaml => ("ocaml", vec![path, body]),
-            Cgi::Pascal => ("fpc", vec![path, body]),
-            Cgi::Perl => ("perl", vec![path, body]),
-            Cgi::PHP => ("php", vec![path, body]),
-            Cgi::Python => ("python3", vec![path, body]),
-            Cgi::R => ("Rscript", vec![path, body]),
-            Cgi::Ruby => ("ruby", vec![path, body]),
-            Cgi::Rust => (
-                "cargo",
                 vec![
-                    "run".to_string(),
-                    "--manifest-path".to_string(),
-                    "Cargo.toml".to_string(),
-                    path,
-                    body,
+                    "c".to_string(),
+                    "--run".to_string(),
+                    full_path.clone(),
+                    body.clone(),
                 ],
             ),
-            Cgi::Scala => ("scala", vec![path, body]),
-            Cgi::Shell => ("sh", vec![path, body]),
-            Cgi::Swift => ("swift", vec![path, body]),
-            Cgi::TypeScript => ("ts-node", vec![path, body]),
-            Cgi::Zig => ("zig", vec!["run".to_string(), path, body]),
+            Cgi::ObjectiveC => ("./compiled/objc_binary", vec![body.clone()]),
+            Cgi::OCaml => ("ocaml", vec![full_path.clone(), body.clone()]),
+            Cgi::Pascal => ("fpc", vec![full_path.clone(), body.clone()]),
+            Cgi::Perl => ("perl", vec![full_path.clone(), body.clone()]),
+            Cgi::PHP => ("php", vec![full_path.clone(), body.clone()]),
+            Cgi::Python => ("python", vec![full_path.clone(), body.clone()]),
+            Cgi::R => ("Rscript", vec![full_path.clone(), body.clone()]),
+            Cgi::Ruby => ("ruby", vec![full_path.clone(), body.clone()]),
+            Cgi::Rust => ("./compiled/rust_binary", vec![body.clone()]),
+            Cgi::Scala => ("scala", vec![full_path.clone(), body.clone()]),
+            Cgi::Shell => ("sh", vec![full_path.clone(), body.clone()]),
+            Cgi::Swift => ("swift", vec![full_path.clone(), body.clone()]),
+            Cgi::TypeScript => ("ts-node", vec![full_path.clone(), body.clone()]),
+            Cgi::Zig => ("./compiled/zig_binary", vec![body.clone()]),
         },
         None => {
             log!(
@@ -157,6 +221,8 @@ pub fn execute_cgi_script(
             return Err(StatusCode::NOT_FOUND);
         }
     };
+
+    add_env_variables(req, config, file_extension);
 
     // Spawn a new process to execute the CGI script and capture its output
     let body = match Command::new(command).args(arguments).output() {
@@ -172,7 +238,7 @@ pub fn execute_cgi_script(
 
     let mut resp = Response::builder()
         .version(req.version())
-        .header(HOST, config.host)
+        .header(HOST, config.host.clone())
         .status(StatusCode::OK)
         .header(CONTENT_TYPE, "text/html")
         .header(CONTENT_LENGTH, body.len());
@@ -197,7 +263,7 @@ fn add_env_variables(req: &Request<String>, config: &ServerConfig, file_extensio
     }
 
     env::set_var("REQUEST_METHOD", req.method().to_string());
-    env::set_var("SERVER_NAME", config.host);
+    env::set_var("SERVER_NAME", config.host.clone());
 
     if let Some(port) = req.uri().port_u16() {
         env::set_var("SERVER_PORT", format!("{port}"));
@@ -208,7 +274,7 @@ fn add_env_variables(req: &Request<String>, config: &ServerConfig, file_extensio
     let path = req
         .uri()
         .path()
-        .split(file_extension)
+        .split(&file_extension)
         .collect::<Vec<&str>>();
 
     // localhost:8080/cgi/python.py/path/to/file -> PATH_INFO: /path/to/file

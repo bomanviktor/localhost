@@ -2,9 +2,9 @@ use crate::log;
 use crate::log::*;
 use crate::server::state::*;
 use crate::server::{Server, SocketAddr, TcpListener};
-use crate::server_config::server_config;
+use crate::server_config::load_config;
 
-pub fn start(servers: Vec<Server<'static>>) {
+pub fn start(servers: Vec<Server>) {
     let mut s = ServerState::init(servers);
     loop {
         s.poll();
@@ -12,20 +12,20 @@ pub fn start(servers: Vec<Server<'static>>) {
     }
 }
 
-pub fn servers() -> Vec<Server<'static>> {
+pub fn servers() -> Vec<Server> {
     let mut servers = Vec::new();
 
-    for config in server_config() {
+    for config in load_config() {
         let mut listeners = Vec::new();
         for port in &config.ports {
-            listeners.push(bind_port(port, config.host));
+            listeners.push(bind_port(port, &config.host));
         }
-        // Make a server and push it to the servers vector
         servers.push(Server::new(listeners, config))
     }
     servers
 }
-fn bind_port(port: &crate::type_aliases::Port, host: &str) -> TcpListener {
+
+fn bind_port(port: &u16, host: &str) -> TcpListener {
     let address = format!("{}:{}", host, port);
     match TcpListener::bind(address.parse::<SocketAddr>().unwrap()) {
         Ok(listener) => {

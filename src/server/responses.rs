@@ -107,7 +107,7 @@ pub mod informational {
     ) -> Response<Bytes> {
         http::Response::builder()
             .version(version)
-            .header(HOST, config.host) // Replace with your actual header
+            .header(HOST, config.host.clone()) // Replace with your actual header
             .header(SERVER, "grit:lab-localhost/1.0") // Replace with your actual server name and version
             .status(status)
             .body(vec![])
@@ -128,7 +128,7 @@ pub mod redirections {
     ) -> Response<Bytes> {
         http::Response::builder()
             .version(version)
-            .header(HOST, config.host)
+            .header(HOST, config.host.clone())
             .header(SERVER, "grit:lab-localhost/1.0")
             .header(LOCATION, path)
             .status(status)
@@ -141,7 +141,7 @@ pub mod redirections {
             return false;
         }
 
-        redirections.clone().unwrap().contains(&path)
+        redirections.clone().unwrap().contains(&String::from(path))
     }
 }
 
@@ -161,7 +161,7 @@ pub mod errors {
         };
 
         Response::builder()
-            .header(HOST, config.host)
+            .header(HOST, config.host.clone())
             .header(SERVER, "grit:lab-localhost/1.0")
             .header(CONTENT_LENGTH, error_body.len())
             .status(code)
@@ -170,7 +170,10 @@ pub mod errors {
     }
 
     fn check_errors(code: StatusCode, config: &ServerConfig) -> std::io::Result<Bytes> {
-        let error_path = config.default_error_path.unwrap_or("src");
+        let error_path = config
+            .default_error_path
+            .clone()
+            .unwrap_or("src".to_string().clone());
         fs::read(format!("{error_path}/{}.html", code.as_u16()))
     }
 }

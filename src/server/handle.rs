@@ -7,6 +7,7 @@ use crate::server::handle_method;
 use crate::server::path::add_root_to_path;
 use crate::server::redirections::redirect;
 use crate::server::safe::get;
+use crate::server::sessions::get_handler_map;
 use crate::server::*;
 use serve::*;
 
@@ -49,15 +50,26 @@ pub fn handle_connection(stream: &mut TcpStream, config: &ServerConfig) -> io::R
         }
     };
 
+    // Get the handlers
+    let handlers = get_handler_map();
+
     // Use the associated handler for the route
-    if let Some(handler) = route.handler {
-        return match handler(&request, config) {
-            Ok(response) => serve_response(stream, response),
-            Err(code) => {
-                log!(LogFileType::Server, format!("Error: {}", &code));
-                serve_response(stream, error(code, config))
-            }
-        };
+    if let Some(handler_name) = &route.handler {
+        if let Some(handler) = handlers.get(handler_name) {
+            return match handler(&request, config) {
+                Ok(response) => serve_response(stream, response),
+                Err(code) => {
+                    log!(LogFileType::Server, format!("Error: {}", &code));
+                    serve_response(stream, error(code, config))
+                }
+            };
+        } else {
+            log!(
+                LogFileType::Server,
+                format!("Handler not found: {}", handler_name)
+            );
+            return serve_response(stream, error(StatusCode::INTERNAL_SERVER_ERROR, config));
+        }
     }
 
     let path = &add_root_to_path(&route, request.uri().path());
@@ -67,7 +79,7 @@ pub fn handle_connection(stream: &mut TcpStream, config: &ServerConfig) -> io::R
         let settings = route.settings.as_ref().unwrap();
 
         // Serve the default file if enabled in config
-        if let Some(default_file) = settings.default_if_url_is_dir {
+        if let Some(default_file) = &settings.default_if_url_is_dir {
             let default_path = &add_root_to_path(&route, default_file);
             let request_string =
                 replace_path_in_request(&request_string, request.uri().path(), default_path);
@@ -130,7 +142,8 @@ mod serve {
     use mio::net::TcpStream;
     use std::io::Write;
     use std::path::Path;
-    use std::{fs, io};
+    use std::time::Duration;
+    use std::{fs, io, thread};
 
     pub fn serve_response(stream: &mut TcpStream, response: Response<Bytes>) -> io::Result<()> {
         let formatted_response = unsafe { format_response(response.clone()) };
@@ -140,6 +153,7 @@ mod serve {
         while written_size < total_size {
             match stream.write(&formatted_response[written_size..]) {
                 Ok(0) => {
+                    thread::sleep(Duration::from_millis(500));
                     break; // No more data to write
                 }
                 Ok(n) => {

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::log;
 use crate::log::*;
 use crate::server_config::ServerConfig;
@@ -7,6 +9,18 @@ use http::response::Builder;
 use http::{HeaderValue, Request, Response, StatusCode};
 
 type Cookie = str;
+
+pub type HandlerFunc = fn(&Request<String>, &ServerConfig) -> Result<Response<Bytes>, StatusCode>;
+
+pub fn get_handler_map() -> HashMap<String, HandlerFunc> {
+    let mut handlers = HashMap::new();
+    handlers.insert("update_cookie".to_string(), update_cookie as HandlerFunc);
+    handlers.insert(
+        "validate_cookie".to_string(),
+        validate_cookie as HandlerFunc,
+    );
+    handlers
+}
 
 pub fn update_cookie(
     req: &Request<String>,
@@ -24,7 +38,7 @@ pub fn update_cookie(
                 .version(req.version()),
             "grit:lab-cookie",
         ) // Replace this with a database value.
-        .header(HOST, conf.host)
+        .header(HOST, conf.host.clone())
         .body(vec![])
         {
             Ok(resp) => Ok(resp),
@@ -44,7 +58,7 @@ pub fn update_cookie(
             .version(req.version()),
         "grit:lab-cookie",
     ) // Replace this with a database value.
-    .header(HOST, conf.host)
+    .header(HOST, conf.host.clone())
     .body(vec![])
     {
         Ok(resp) => Ok(resp),
@@ -85,7 +99,7 @@ pub fn validate_cookie(
             .version(req.version()),
         value,
     )
-    .header(HOST, conf.host)
+    .header(HOST, conf.host.clone())
     .body(vec![])
     {
         Ok(resp) => Ok(resp),

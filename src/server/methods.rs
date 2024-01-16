@@ -14,14 +14,15 @@ pub fn get_method(req: &str) -> Result<Method, StatusCode> {
     match Method::from_str(method) {
         Ok(method) => Ok(method),
         Err(e) => {
-            log!(LogFileType::Server, format!("Error: {e}"));
+            log!(LogFileType::Server, format!("Error: {e}, Request: {req}"));
             Err(StatusCode::BAD_REQUEST)
         }
     }
 }
 
 pub fn method_is_allowed(method: &Method, route: &Route) -> bool {
-    route.methods.contains(method)
+    let method_str = method.as_str();
+    route.methods.iter().any(|m| m == method_str)
 }
 
 pub fn handle_method(
@@ -104,7 +105,7 @@ pub mod safe {
 
         let mut resp = Response::builder()
             .version(req.version())
-            .header(HOST, config.host)
+            .header(HOST, config.host.clone())
             .status(StatusCode::OK)
             .header(CONTENT_TYPE, content_type(path))
             .header(CONTENT_LENGTH, body.len());
@@ -140,7 +141,7 @@ pub mod safe {
 
         let resp = Response::builder()
             .version(req.version())
-            .header(HOST, config.host)
+            .header(HOST, config.host.clone())
             .status(StatusCode::OK)
             .header(CONTENT_TYPE, content_type(path))
             .header(CONTENT_LENGTH, metadata.len().to_string()) // Set the Content-Length header
@@ -183,7 +184,7 @@ pub mod safe {
 
         let resp = Response::builder()
             .version(req.version())
-            .header(HOST, config.host)
+            .header(HOST, config.host.clone())
             .status(StatusCode::OK)
             .header(CONTENT_TYPE, "message/http")
             .header("Via", via)
@@ -207,7 +208,7 @@ pub mod safe {
 
         let resp = Response::builder()
             .version(req.version())
-            .header(HOST, config.host)
+            .header(HOST, config.host.clone())
             .status(StatusCode::OK)
             .header(ALLOW, allowed_methods)
             .body(vec![]) // Empty body for OPTIONS

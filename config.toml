@@ -1,0 +1,37 @@
+[[servers]]
+host = "127.0.0.1"
+ports = [8080, 8081, 8082]
+body_size_limit = 10024
+
+  [[servers.routes]]
+  url_path = "/api/update-cookie"
+  methods = ["POST"]
+
+  [[servers.routes]]
+  url_path = "/api/get-cookie"
+  methods = ["GET"]
+
+  [[servers.routes]]
+  url_path = "/cgi"
+  methods = ["GET"]
+  list_directory = true
+  cgi_def = { js = "JavaScript", php = "PHP", py = "Python", rb = "Ruby" }
+
+  [[servers.routes]]
+  url_path = "/test.txt"
+  methods = ["GET", "POST"]
+  root_path = "/files"
+  list_directory = false
+
+  [[servers.routes]]
+  url_path = "/mega-dir"
+  methods = ["GET"]
+  root_path = "/files"
+  default_if_url_is_dir = "/dir.html"
+  list_directory = false
+
+  [[servers.routes]]
+  url_path = "/"
+  methods = ["GET"]
+  default_if_url_is_dir = "/dir.html"
+  list_directory = true

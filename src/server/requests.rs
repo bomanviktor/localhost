@@ -119,21 +119,18 @@ pub mod path {
     }
 
     /// `path_exists` gets the `path` and the `index` of the `route` it was a part of if found.
-    pub fn path_exists<'a>(
-        requested_path: Path<'a>,
-        routes: &[Route<'a>],
-    ) -> Option<(usize, Path<'a>)> {
+    pub fn path_exists(requested_path: Path, routes: &[Route]) -> Option<(usize, Path)> {
         // Check for _exact_ matches in path
         for (i, route) in routes.iter().enumerate() {
             if route.url_path == requested_path {
-                return Some((i, route.url_path));
+                return Some((i, route.url_path.clone()));
             }
             if route.settings.is_none() {
                 continue;
             }
             if let Some(redirections) = route.settings.clone().unwrap().http_redirections {
                 if redirections.contains(&requested_path) {
-                    return Some((i, route.url_path));
+                    return Some((i, route.url_path.clone()));
                 }
             }
         }
@@ -143,14 +140,14 @@ pub mod path {
 
         // Check for paths with matching roots
         for (i, route) in routes.iter().enumerate() {
-            if !requested_path.starts_with(route.url_path) {
+            if !requested_path.starts_with(route.url_path.as_str()) {
                 continue;
             }
 
             // Sort the routes by length. More specified routes are prioritized
             // Example: "/foo" and "/foo/bar" both match "/foo/bar/baz". This will take the "/foo/bar" route.
             if path_str.is_empty() || route.url_path.len() > path_str.len() {
-                path_str = route.url_path;
+                path_str = route.url_path.as_str();
                 index = i;
             }
         }
@@ -158,13 +155,17 @@ pub mod path {
         if index == usize::MAX {
             None
         } else {
-            Some((index, path_str))
+            Some((index, path_str.to_string()))
         }
     }
 
     pub fn add_root_to_path(route: &Route, path: &str) -> String {
         if let Some(settings) = &route.settings {
-            let root = settings.root_path.unwrap_or_default();
+            let root = settings
+                .root_path
+                .as_ref()
+                .unwrap_or(&"".to_string())
+                .clone();
             format!(".{root}{path}")
         } else {
             format!(".{path}")
