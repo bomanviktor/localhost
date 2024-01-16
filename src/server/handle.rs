@@ -10,7 +10,7 @@ use crate::server::safe::get;
 use crate::server::*;
 use serve::*;
 
-pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Result<()> {
+pub fn handle_connection(stream: &mut TcpStream, config: &ServerConfig) -> io::Result<()> {
     let mut buffer = [0; 1024];
 
     // Read from stream
@@ -137,33 +137,19 @@ mod serve {
         let total_size = formatted_response.len();
         let mut written_size = 0;
 
-        println!("Response size: {} bytes", total_size);
-
         while written_size < total_size {
             match stream.write(&formatted_response[written_size..]) {
                 Ok(0) => {
-                    println!("No more data to write.");
-                    break;
+                    break; // No more data to write
                 }
                 Ok(n) => {
                     written_size += n;
                 }
-                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    println!(
-                        "WouldBlock error: written {} of {} bytes, retrying...",
-                        written_size, total_size
-                    );
-                    // Sleep for a short duration before retrying
-                    //std::thread::sleep(Duration::from_millis(1));
+                Err(e) if e.kind() != io::ErrorKind::WouldBlock => {
+                    return Err(e); // Error is not WouldBlock, return the error.
                 }
-                Err(e) => return Err(e),
+                _ => {} // Event is now blocking, retry later.
             }
-        }
-
-        if written_size == total_size {
-            println!("All data written successfully.");
-        } else {
-            println!("Written {} of {} bytes", written_size, total_size);
         }
 
         stream.flush()

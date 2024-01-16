@@ -126,28 +126,22 @@ fn handle_existing_connection(
     };
 
     let (stream, conf) = connection;
-    match crate::server::handle_client(stream, conf) {
-        Ok(_) => {
-            // If it's not a WouldBlock error, deregister the stream
-            poll.registry()
-                .deregister(stream)
-                .expect("Failed to deregister stream");
-            //remove from connections map
-            connections.remove(&token);
-        }
-        Err(e) => match e.kind() {
+    if let Err(e) = crate::server::handle_connection(stream, conf) {
+        match e.kind() {
             ErrorKind::WouldBlock => {
+                // If the error is WouldBlock, the operation should be retried later
                 poll.registry()
                     .reregister(stream, token, Interest::READABLE)
-                    .expect("Failed to reregister stream");
-                // If the error is WouldBlock, the operation should be retried later
-                // Therefore, we keep the connection registered and return
-            }
-            ErrorKind::BrokenPipe => {
-                log!(LogFileType::Client, format!("Client disconnected: {e}"))
+                    .expect("Failed to re-register stream");
+                return; // Therefore, we keep the connection registered and return
             }
             _ => log!(LogFileType::Client, format!("Error handling client: {e}")),
-        },
+        }
+
+        poll.registry()
+            .deregister(stream)
+            .expect("Failed to deregister stream");
+        connections.remove(&token);
     }
 }
 
