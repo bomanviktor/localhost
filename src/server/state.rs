@@ -120,21 +120,35 @@ fn handle_existing_connection(
     token: Token,
     connections: &mut HashMap<Token, Connection>,
 ) {
-    if connections.get_mut(&token).is_none() {
-        return;
-    }
+    let connection = match connections.get_mut(&token) {
+        Some(connection) => connection,
+        None => return,
+    };
 
-    let (stream, conf) = &mut connections.remove(&token).unwrap();
-    if let Err(e) = crate::server::handle_client(stream, conf) {
-        match e.kind() {
-            ErrorKind::BrokenPipe => log!(LogFileType::Client, format!("Client disconnected: {e}")),
-            ErrorKind::WouldBlock => log!(LogFileType::Client, format!("Client is blocking: {e}")),
-            _ => log!(LogFileType::Client, format!("Error handling client: {e}")),
+    let (stream, conf) = connection;
+    match crate::server::handle_client(stream, conf) {
+        Ok(_) => {
+            // If it's not a WouldBlock error, deregister the stream
+            poll.registry()
+                .deregister(stream)
+                .expect("Failed to deregister stream");
+            //remove from connections map
+            connections.remove(&token);
         }
+        Err(e) => match e.kind() {
+            ErrorKind::WouldBlock => {
+                poll.registry()
+                    .reregister(stream, token, Interest::READABLE)
+                    .expect("Failed to reregister stream");
+                // If the error is WouldBlock, the operation should be retried later
+                // Therefore, we keep the connection registered and return
+            }
+            ErrorKind::BrokenPipe => {
+                log!(LogFileType::Client, format!("Client disconnected: {e}"))
+            }
+            _ => log!(LogFileType::Client, format!("Error handling client: {e}")),
+        },
     }
-    poll.registry()
-        .deregister(stream)
-        .expect("Failed to deregister stream");
 }
 
 use crate::log;
