@@ -78,8 +78,19 @@ pub mod safe {
         req: &Request<String>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
-        let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, req.uri().path());
+        // let route = &get_route(req, config).unwrap();
+        //let's intialize the route with a match statement instead
+        let route = match get_route(req, config) {
+            Ok(route) => route,
+            _ => {
+                log!(
+                    LogFileType::Server,
+                    format!("Error: Path not found {}", req.uri().path())
+                );
+                return Err(StatusCode::NOT_FOUND);
+            }
+        };
+        let path = &add_root_to_path(&route, req.uri().path());
         let body = match fs::read(path) {
             Ok(bytes) => bytes,
             Err(_) => {
