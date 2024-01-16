@@ -32,7 +32,7 @@ pub mod server_config {
 
         #[derive(Clone, Debug)]
         pub struct Route<'a> {
-            pub path: Path<'a>,
+            pub url_path: Path<'a>,
             pub methods: Vec<Method>,
             pub handler: Option<HandlerFunc>,
             pub settings: Option<Settings<'a>>,
@@ -64,7 +64,7 @@ pub mod server {
     use crate::type_aliases::Bytes;
     use http::{Method, Request, Response, StatusCode};
     use std::io;
-    use std::io::{Read, Write};
+    use std::io::Read;
 
     use crate::server_config::ServerConfig;
     use mio::net::{TcpListener, TcpStream};

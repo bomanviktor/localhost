@@ -3,28 +3,9 @@ use crate::log::*;
 use crate::server::{Request, Route, ServerConfig, StatusCode};
 
 pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>, StatusCode> {
-    let version = match version::get_version(req_str) {
-        Ok(v) => v,
-        Err(v) => {
-            log!(
-                LogFileType::Server,
-                format!("Error: Incorrect version '{}'", v)
-            );
-            return Err(StatusCode::HTTP_VERSION_NOT_SUPPORTED);
-        }
-    };
-
+    let version = version::get_version(req_str)?;
     let path = path::get_path(req_str);
-    let method = match super::get_method(req_str) {
-        Ok(method) => method,
-        Err(method) => {
-            log!(
-                LogFileType::Server,
-                format!("Error: Method not allowed '{}' on path '{}'", method, path)
-            );
-            return Err(StatusCode::METHOD_NOT_ALLOWED);
-        }
-    };
+    let method = super::get_method(req_str)?;
 
     // Constructing the request with parsed headers and body
     let mut request_builder = http::Request::builder()
@@ -49,18 +30,9 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
     };
 
     let body = if headers::is_chunked(request_builder.headers_ref()) {
-        match get_chunked_body(body_str, conf.body_size_limit) {
-            Ok(body) => body,
-            Err(status) => {
-                log!(
-                    LogFileType::Server,
-                    format!("Error: Failed to get chunked body {}", status)
-                );
-                return Err(status);
-            }
-        }
+        get_chunked_body(body_str, conf.body_size_limit)?
     } else {
-        body::get_body(req_str, conf.body_size_limit).unwrap_or_default()
+        body::get_body(req_str, conf.body_size_limit)?
     };
 
     match request_builder.body(body) {
@@ -139,7 +111,6 @@ pub mod path {
     use super::*;
     use crate::server::utils::{get_line, get_split_index};
     use crate::type_aliases::Path;
-    use http::Uri;
 
     /// `path` gets the path from the `request`
     pub fn get_path(req: &str) -> &str {
@@ -154,15 +125,15 @@ pub mod path {
     ) -> Option<(usize, Path<'a>)> {
         // Check for _exact_ matches in path
         for (i, route) in routes.iter().enumerate() {
-            if route.path == requested_path {
-                return Some((i, route.path));
+            if route.url_path == requested_path {
+                return Some((i, route.url_path));
             }
             if route.settings.is_none() {
                 continue;
             }
             if let Some(redirections) = route.settings.clone().unwrap().http_redirections {
                 if redirections.contains(&requested_path) {
-                    return Some((i, route.path));
+                    return Some((i, route.url_path));
                 }
             }
         }
@@ -172,12 +143,14 @@ pub mod path {
 
         // Check for paths with matching roots
         for (i, route) in routes.iter().enumerate() {
-            if !requested_path.starts_with(route.path) {
+            if !requested_path.starts_with(route.url_path) {
                 continue;
             }
 
-            if path_str.is_empty() || route.path.len() < path_str.len() {
-                path_str = route.path;
+            // Sort the routes by length. More specified routes are prioritized
+            // Example: "/foo" and "/foo/bar" both match "/foo/bar/baz". This will take the "/foo/bar" route.
+            if path_str.is_empty() || route.url_path.len() > path_str.len() {
+                path_str = route.url_path;
                 index = i;
             }
         }
@@ -189,12 +162,12 @@ pub mod path {
         }
     }
 
-    pub fn add_root_to_path(route: &Route, uri: &Uri) -> String {
+    pub fn add_root_to_path(route: &Route, path: &str) -> String {
         if let Some(settings) = &route.settings {
-            let root = settings.root_path.unwrap_or(".");
-            format!("{root}{}", uri.path())
+            let root = settings.root_path.unwrap_or_default();
+            format!(".{root}{path}")
         } else {
-            uri.path().to_string()
+            format!(".{path}")
         }
     }
 }
@@ -273,7 +246,9 @@ pub mod headers {
 }
 
 pub mod body {
-    pub fn get_body(req: &str, limit: usize) -> Option<String> {
+    use http::StatusCode;
+
+    pub fn get_body(req: &str, limit: usize) -> Result<String, StatusCode> {
         let body = req
             .trim_end_matches('\0')
             .split("\r\n\r\n")
@@ -282,9 +257,9 @@ pub mod body {
             .join("\r\n\r\n");
 
         if body.len() <= limit {
-            Some(body)
+            Ok(body)
         } else {
-            None
+            Err(StatusCode::PAYLOAD_TOO_LARGE)
         }
     }
 }

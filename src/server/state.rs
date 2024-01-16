@@ -90,7 +90,7 @@ fn accept_connection<'a>(
     match listener.accept() {
         Ok((mut stream, _)) => {
             let linger_duration = match std::env::consts::OS {
-                "macos" => Some(Duration::from_millis(100)),
+                "macos" => Some(Duration::from_millis(1000)),
                 _ => None,
             };
 

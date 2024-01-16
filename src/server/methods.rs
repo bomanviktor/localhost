@@ -7,11 +7,17 @@ use http::header::{ALLOW, CONTENT_LENGTH, CONTENT_TYPE, HOST};
 use std::fs;
 use std::str::FromStr;
 
-pub fn get_method(req: &str) -> Result<Method, http::method::InvalidMethod> {
+pub fn get_method(req: &str) -> Result<Method, StatusCode> {
     let line = get_line(req, 0);
     let method = get_split_index(line, 0);
     // "GET /path2 HTTP/1.1" -> "GET"
-    Method::from_str(method)
+    match Method::from_str(method) {
+        Ok(method) => Ok(method),
+        Err(e) => {
+            log!(LogFileType::Server, format!("Error: {e}"));
+            Err(StatusCode::BAD_REQUEST)
+        }
+    }
 }
 
 pub fn method_is_allowed(method: &Method, route: &Route) -> bool {
@@ -56,7 +62,7 @@ pub fn handle_method(
     Ok(resp)
 }
 
-mod safe {
+pub mod safe {
     use super::*;
     use crate::server::get_route;
     use crate::server::path::add_root_to_path;
@@ -72,8 +78,19 @@ mod safe {
         req: &Request<String>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
-        let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, req.uri());
+        // let route = &get_route(req, config).unwrap();
+        //let's intialize the route with a match statement instead
+        let route = match get_route(req, config) {
+            Ok(route) => route,
+            _ => {
+                log!(
+                    LogFileType::Server,
+                    format!("Error: Path not found {}", req.uri().path())
+                );
+                return Err(StatusCode::NOT_FOUND);
+            }
+        };
+        let path = &add_root_to_path(&route, req.uri().path());
         let body = match fs::read(path) {
             Ok(bytes) => bytes,
             Err(_) => {
@@ -109,7 +126,7 @@ mod safe {
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, req.uri());
+        let path = &add_root_to_path(route, req.uri().path());
         let metadata = match fs::metadata(path) {
             Ok(metadata) => metadata,
             Err(_) => {
@@ -209,7 +226,7 @@ mod not_safe {
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, req.uri());
+        let path = &add_root_to_path(route, req.uri().path());
         let body = req.body().as_bytes().to_vec();
 
         let resp = Response::builder()
@@ -257,7 +274,7 @@ mod not_safe {
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, req.uri());
+        let path = &add_root_to_path(route, req.uri().path());
         let bytes = req.body().as_bytes().to_vec();
 
         let resp = Response::builder()
@@ -284,7 +301,7 @@ mod not_safe {
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, req.uri());
+        let path = &add_root_to_path(route, req.uri().path());
         let bytes = req.body().as_bytes().to_vec();
 
         let resp = Response::builder()
@@ -320,7 +337,7 @@ mod not_safe {
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, req.uri());
+        let path = &add_root_to_path(route, req.uri().path());
         let body = match fs::read(path) {
             Ok(bytes) => bytes,
             Err(_) => {

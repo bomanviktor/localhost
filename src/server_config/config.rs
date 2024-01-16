@@ -11,19 +11,19 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
         body_size_limit: 10024,
         routes: vec![
             Route {
-                path: "/api/update-cookie",
+                url_path: "/api/update-cookie",
                 methods: vec![http::Method::POST],
                 handler: Some(update_cookie),
                 settings: None,
             },
             Route {
-                path: "/api/get-cookie",
+                url_path: "/api/get-cookie",
                 methods: vec![http::Method::GET],
                 handler: Some(validate_cookie),
                 settings: None,
             },
             Route {
-                path: "/cgi",
+                url_path: "/cgi",
                 methods: vec![http::Method::GET],
                 handler: None,
                 settings: Some(Settings {
@@ -42,13 +42,13 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 }),
             },
             Route {
-                path: "/test.txt",
+                url_path: "/test.txt",
                 methods: vec![http::Method::GET, http::Method::POST],
                 handler: None,
                 settings: Some(Settings {
                     http_redirections: None,
                     redirect_status_code: None,
-                    root_path: Some("./files"),
+                    root_path: Some("/files"),
                     default_if_url_is_dir: None,
                     default_if_request_is_dir: None,
                     cgi_def: None,
@@ -56,14 +56,28 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 }),
             },
             Route {
-                path: "/files", // this does allow ./files/* to be accessed
+                url_path: "/mega-dir", // this does allow ./files/* to be accessed
+                methods: vec![http::Method::GET],
+                handler: None,
+                settings: Some(Settings {
+                    http_redirections: None,
+                    redirect_status_code: None,
+                    root_path: Some("/files"),
+                    default_if_url_is_dir: Some("/dir.html"),
+                    default_if_request_is_dir: None,
+                    cgi_def: None,
+                    list_directory: false,
+                }),
+            },
+            Route {
+                url_path: "/",
                 methods: vec![http::Method::GET],
                 handler: None,
                 settings: Some(Settings {
                     http_redirections: None,
                     redirect_status_code: None,
                     root_path: None,
-                    default_if_url_is_dir: None,
+                    default_if_url_is_dir: Some("/dir.html"),
                     default_if_request_is_dir: None,
                     cgi_def: None,
                     list_directory: true,
