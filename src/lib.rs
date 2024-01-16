@@ -32,7 +32,7 @@ pub mod server_config {
 
         #[derive(Clone, Debug)]
         pub struct Route<'a> {
-            pub path: Path<'a>,
+            pub url_path: Path<'a>,
             pub methods: Vec<Method>,
             pub handler: Option<HandlerFunc>,
             pub settings: Option<Settings<'a>>,

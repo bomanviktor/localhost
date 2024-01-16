@@ -125,15 +125,15 @@ pub mod path {
     ) -> Option<(usize, Path<'a>)> {
         // Check for _exact_ matches in path
         for (i, route) in routes.iter().enumerate() {
-            if route.path == requested_path {
-                return Some((i, route.path));
+            if route.url_path == requested_path {
+                return Some((i, route.url_path));
             }
             if route.settings.is_none() {
                 continue;
             }
             if let Some(redirections) = route.settings.clone().unwrap().http_redirections {
                 if redirections.contains(&requested_path) {
-                    return Some((i, route.path));
+                    return Some((i, route.url_path));
                 }
             }
         }
@@ -143,14 +143,14 @@ pub mod path {
 
         // Check for paths with matching roots
         for (i, route) in routes.iter().enumerate() {
-            if !requested_path.starts_with(route.path) {
+            if !requested_path.starts_with(route.url_path) {
                 continue;
             }
 
             // Sort the routes by length. More specified routes are prioritized
             // Example: "/foo" and "/foo/bar" both match "/foo/bar/baz". This will take the "/foo/bar" route.
-            if path_str.is_empty() || route.path.len() > path_str.len() {
-                path_str = route.path;
+            if path_str.is_empty() || route.url_path.len() > path_str.len() {
+                path_str = route.url_path;
                 index = i;
             }
         }

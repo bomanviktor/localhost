@@ -11,19 +11,19 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
         body_size_limit: 10024,
         routes: vec![
             Route {
-                path: "/api/update-cookie",
+                url_path: "/api/update-cookie",
                 methods: vec![http::Method::POST],
                 handler: Some(update_cookie),
                 settings: None,
             },
             Route {
-                path: "/api/get-cookie",
+                url_path: "/api/get-cookie",
                 methods: vec![http::Method::GET],
                 handler: Some(validate_cookie),
                 settings: None,
             },
             Route {
-                path: "/cgi",
+                url_path: "/cgi",
                 methods: vec![http::Method::GET],
                 handler: None,
                 settings: Some(Settings {
@@ -42,7 +42,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 }),
             },
             Route {
-                path: "/test.txt",
+                url_path: "/test.txt",
                 methods: vec![http::Method::GET, http::Method::POST],
                 handler: None,
                 settings: Some(Settings {
@@ -56,7 +56,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 }),
             },
             Route {
-                path: "/mega-dir", // this does allow ./files/* to be accessed
+                url_path: "/mega-dir", // this does allow ./files/* to be accessed
                 methods: vec![http::Method::GET],
                 handler: None,
                 settings: Some(Settings {
@@ -70,7 +70,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 }),
             },
             Route {
-                path: "/",
+                url_path: "/",
                 methods: vec![http::Method::GET],
                 handler: None,
                 settings: Some(Settings {
