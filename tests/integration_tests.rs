@@ -4,8 +4,6 @@ use reqwest;
 
 mod common;
 
-extern crate lazy_static;
-
 use lazy_static::lazy_static;
 use std::sync::Mutex;
 
@@ -130,8 +128,28 @@ mod chunked_encoding {
     }
 
     #[cfg(test)]
-    mod get {
+    mod request_testing {
+        use super::*;
         use crate::HOST;
+
+        #[test]
+        fn chunk_test() {
+            let body = "Wiki\r\npedia\r\n in\r\n\r\nchunks.\r\n\r\n";
+
+            let client = Client::new();
+
+            let valid_endpoint = "/files";
+
+            let response = send_chunked_request(
+                &client,
+                &format!("{HOST}{valid_endpoint}"),
+                body,
+                http::Method::GET,
+            );
+
+            // Check the response status and body
+            assert_eq!(response.status(), reqwest::StatusCode::OK);
+        }
 
         #[tokio::test]
         async fn valid() {
@@ -193,49 +211,23 @@ mod chunked_encoding {
 
             // Test: Send request with with body exceeding 10024 bytes
             //Body with size larger than 10024 bytes
-            // let mut body = String::from("a");
-            // for _ in 0..20000 {
-            //     body.push('a');
-            // }
-            //
-            // println!("Body length is {}", body.len());
-            //
-            // let res = client.get(format!("{}/api/get-cookie", HOST))
-            //     .header("Cookie", "grit:lab-cookie=invalid_cookie_value")
-            //     .body(body)
-            //     .send()
-            //     .await
-            //     .unwrap();
-            //
-            // assert_eq!(res.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
+            let mut body = String::from("a");
+            for _ in 0..20000 {
+                body.push('a');
+            }
+
+            println!("Body length is {}", body.len());
+
+            let res = client
+                .get(format!("{}/test", HOST))
+                .header("Cookie", "grit:lab-cookie=invalid_cookie_value")
+                .body(body)
+                .send()
+                .await
+                .unwrap();
+
+            assert_eq!(res.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
         }
-    }
-
-    #[cfg(test)]
-    mod post {
-        use super::*;
-
-        #[test]
-        fn valid() {
-            let body = "Wiki\r\npedia\r\n in\r\n\r\nchunks.\r\n\r\n";
-
-            let client = Client::new();
-
-            let valid_endpoint = "/files";
-
-            let response = send_chunked_request(
-                &client,
-                &format!("{HOST}{valid_endpoint}"),
-                body,
-                http::Method::GET,
-            );
-
-            // Check the response status and body
-            assert_eq!(response.status(), reqwest::StatusCode::OK);
-        }
-
-        #[test]
-        fn invalid() {}
     }
 }
 
@@ -255,7 +247,7 @@ mod test_requests {
 }
 
 #[cfg(test)]
-mod sessions_tests {
+mod sessions_unit_tests {
     use http::header::COOKIE;
     use http::{HeaderValue, Request, StatusCode};
     use localhost::server::update_cookie;
