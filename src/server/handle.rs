@@ -10,7 +10,7 @@ use crate::server::safe::get;
 use crate::server::*;
 use serve::*;
 
-pub fn handle_client(stream: &mut TcpStream, config: &ServerConfig) -> io::Result<()> {
+pub fn handle_connection(stream: &mut TcpStream, config: &ServerConfig) -> io::Result<()> {
     let mut buffer = [0; 1024];
 
     // Read from stream
@@ -123,7 +123,7 @@ fn replace_path_in_request(req_string: &str, path: &str, default_path: &str) -> 
 }
 
 mod serve {
-    use crate::server::{content_type, format_response};
+    use crate::server::format_response;
     use crate::type_aliases::Bytes;
     use http::header::CONTENT_TYPE;
     use http::{Response, StatusCode};
@@ -133,9 +133,25 @@ mod serve {
     use std::{fs, io};
 
     pub fn serve_response(stream: &mut TcpStream, response: Response<Bytes>) -> io::Result<()> {
-        unsafe {
-            stream.write_all(&format_response(response.clone()))?;
+        let formatted_response = unsafe { format_response(response.clone()) };
+        let total_size = formatted_response.len();
+        let mut written_size = 0;
+
+        while written_size < total_size {
+            match stream.write(&formatted_response[written_size..]) {
+                Ok(0) => {
+                    break; // No more data to write
+                }
+                Ok(n) => {
+                    written_size += n;
+                }
+                Err(e) if e.kind() != io::ErrorKind::WouldBlock => {
+                    return Err(e); // Error is not WouldBlock, return the error.
+                }
+                _ => {} // Event is now blocking, retry later.
+            }
         }
+
         stream.flush()
     }
 
@@ -173,24 +189,6 @@ mod serve {
             .status(StatusCode::OK)
             .header(CONTENT_TYPE, "text/html")
             .body(Bytes::from(body))
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "Could not build response"))?;
-
-        serve_response(stream, response)
-    }
-
-    /// # serve_file
-    ///
-    /// Serve a file located at `file_path`
-    #[allow(dead_code)]
-    pub fn serve_file(stream: &mut TcpStream, file_path: &str) -> io::Result<()> {
-        let kek = format!(".{file_path}"); // kek
-        let file_contents =
-            fs::read(kek).map_err(|_| io::Error::new(io::ErrorKind::NotFound, "File not found"))?;
-
-        let response = Response::builder()
-            .status(StatusCode::OK)
-            .header(CONTENT_TYPE, content_type(file_path))
-            .body(Bytes::from(file_contents))
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "Could not build response"))?;
 
         serve_response(stream, response)
