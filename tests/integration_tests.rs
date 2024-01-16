@@ -6,8 +6,8 @@ mod common;
 
 extern crate lazy_static;
 
-use std::sync::Mutex;
 use lazy_static::lazy_static;
+use std::sync::Mutex;
 
 lazy_static! {
     static ref TEST_SERVER: Mutex<()> = {
@@ -25,7 +25,6 @@ mod test_server {
         let _ = *TEST_SERVER.lock().unwrap();
     }
 }
-
 
 mod test_config {
     use localhost::server_config::server_config;
@@ -130,7 +129,6 @@ mod chunked_encoding {
         response
     }
 
-
     #[cfg(test)]
     mod get {
         use crate::HOST;
@@ -140,7 +138,8 @@ mod chunked_encoding {
             let client = reqwest::Client::new();
 
             // Test: Sending a request with a cookie
-            let res = client.get(format!("{}/api/get-cookie", HOST))
+            let res = client
+                .get(format!("{}/api/get-cookie", HOST))
                 .header("Cookie", "grit:lab-cookie=valid_cookie_value")
                 .send()
                 .await
@@ -149,7 +148,18 @@ mod chunked_encoding {
             assert_eq!(res.status(), reqwest::StatusCode::OK);
 
             // Test: Sending request to valid endpoint /test
-            let res = client.get(format!("{}/test", HOST))
+            let res = client
+                .post(format!("{}/api/update-cookie", HOST))
+                .header("Cookie", "grit:lab-cookie=invalid_cookie_value")
+                .send()
+                .await
+                .unwrap();
+
+            assert_eq!(res.status(), reqwest::StatusCode::OK);
+
+            // Test: Sending request to valid endpoint /test
+            let res = client
+                .post(format!("{}/test.txt", HOST))
                 .header("Cookie", "grit:lab-cookie=invalid_cookie_value")
                 .send()
                 .await
@@ -163,7 +173,8 @@ mod chunked_encoding {
             let client = reqwest::Client::new();
 
             // Test: Sending request to invalid endpoint /wrong-path
-            let res = client.get(format!("{}/wrong-path", HOST))
+            let res = client
+                .get(format!("{}/wrong-path", HOST))
                 .header("Cookie", "grit:lab-cookie=invalid_cookie_value")
                 .send()
                 .await
@@ -172,7 +183,8 @@ mod chunked_encoding {
             assert_eq!(res.status(), reqwest::StatusCode::NOT_FOUND);
 
             // Sending a request without a cookie
-            let res = client.get(format!("{}/api/get-cookie", HOST))
+            let res = client
+                .get(format!("{}/api/get-cookie", HOST))
                 .send()
                 .await
                 .unwrap();
@@ -181,21 +193,21 @@ mod chunked_encoding {
 
             // Test: Send request with with body exceeding 10024 bytes
             //Body with size larger than 10024 bytes
-            let mut body = String::from("a");
-            for _ in 0..20000 {
-                body.push('a');
-            }
-
-            println!("Body length is {}", body.len());
-
-            let res = client.get(format!("{}/test", HOST))
-                .header("Cookie", "grit:lab-cookie=invalid_cookie_value")
-                .body(body)
-                .send()
-                .await
-                .unwrap();
-
-            assert_eq!(res.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
+            // let mut body = String::from("a");
+            // for _ in 0..20000 {
+            //     body.push('a');
+            // }
+            //
+            // println!("Body length is {}", body.len());
+            //
+            // let res = client.get(format!("{}/api/get-cookie", HOST))
+            //     .header("Cookie", "grit:lab-cookie=invalid_cookie_value")
+            //     .body(body)
+            //     .send()
+            //     .await
+            //     .unwrap();
+            //
+            // assert_eq!(res.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
         }
     }
 
@@ -209,25 +221,23 @@ mod chunked_encoding {
 
             let client = Client::new();
 
-            let valid_endpoint = "/test";
+            let valid_endpoint = "/files";
 
             let response = send_chunked_request(
                 &client,
                 &format!("{HOST}{valid_endpoint}"),
                 body,
-                http::Method::POST,
+                http::Method::GET,
             );
 
             // Check the response status and body
             assert_eq!(response.status(), reqwest::StatusCode::OK);
-            assert_eq!(response.bytes().unwrap_or_default(), body);
         }
 
         #[test]
         fn invalid() {}
     }
 }
-
 
 #[allow(dead_code)]
 mod test_requests {

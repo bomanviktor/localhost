@@ -1,17 +1,17 @@
-use std::thread;
 use localhost::log::init_logs;
 use localhost::server::{content_type, servers, start};
 use reqwest::blocking::Client;
 use reqwest::header::CONTENT_TYPE;
 use std::fs::File;
 use std::io::Read;
+use std::thread;
+
 pub fn setup() {
     std::env::set_var("RUNNING_TESTS", "true");
     init_logs();
     thread::spawn(move || {
         start(servers());
     });
-    start(servers());
 }
 
 pub fn send_request(
