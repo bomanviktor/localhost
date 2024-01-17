@@ -1,4 +1,3 @@
-use crate::server::utils::to_bytes;
 use crate::server::{Bytes, Response, ServerConfig, StatusCode};
 use http::header::TRANSFER_ENCODING;
 use http::Version;
@@ -23,7 +22,7 @@ pub unsafe fn format_response(response: Response<Bytes>) -> Bytes {
 
     resp.push_str("\r\n");
     if body.is_empty() {
-        return to_bytes(&resp);
+        return Bytes::from(resp);
     }
 
     // Make this dynamic
@@ -41,7 +40,7 @@ pub unsafe fn format_response(response: Response<Bytes>) -> Bytes {
         }
     }
 
-    to_bytes(&resp)
+    Bytes::from(resp)
 }
 fn is_chunked(head: http::response::Parts) -> bool {
     head.headers
@@ -97,7 +96,7 @@ pub fn content_type(path: &str) -> String {
 
 pub mod informational {
     use super::*;
-    use http::header::{HOST, SERVER};
+    use http::header::HOST;
 
     #[allow(dead_code)]
     fn informational(
@@ -107,8 +106,7 @@ pub mod informational {
     ) -> Response<Bytes> {
         http::Response::builder()
             .version(version)
-            .header(HOST, config.host) // Replace with your actual header
-            .header(SERVER, "grit:lab-localhost/1.0") // Replace with your actual server name and version
+            .header(HOST, config.host)
             .status(status)
             .body(vec![])
             .unwrap()
@@ -118,7 +116,7 @@ pub mod informational {
 pub mod redirections {
     use super::*;
     use crate::type_aliases::Path;
-    use http::header::{HOST, LOCATION, SERVER};
+    use http::header::{HOST, LOCATION};
 
     pub fn redirect(
         status: StatusCode,
@@ -129,7 +127,6 @@ pub mod redirections {
         http::Response::builder()
             .version(version)
             .header(HOST, config.host)
-            .header(SERVER, "grit:lab-localhost/1.0")
             .header(LOCATION, path)
             .status(status)
             .body(vec![])
@@ -147,22 +144,12 @@ pub mod redirections {
 
 pub mod errors {
     use super::*;
-    use crate::log;
-    use crate::log::*;
-    use http::header::{CONTENT_LENGTH, HOST, SERVER};
+    use http::header::{CONTENT_LENGTH, HOST};
 
     pub fn error(code: StatusCode, config: &ServerConfig) -> Response<Bytes> {
-        let error_body = match check_errors(code, config) {
-            Ok(b) => b,
-            Err(_) => {
-                log!(LogFileType::Server, format!("Error: {}", code));
-                to_bytes(&format!("{code}"))
-            }
-        };
-
+        let error_body = check_errors(code, config).unwrap_or(Bytes::from(format!("{code}")));
         Response::builder()
             .header(HOST, config.host)
-            .header(SERVER, "grit:lab-localhost/1.0")
             .header(CONTENT_LENGTH, error_body.len())
             .status(code)
             .body(error_body)
@@ -170,7 +157,7 @@ pub mod errors {
     }
 
     fn check_errors(code: StatusCode, config: &ServerConfig) -> std::io::Result<Bytes> {
-        let error_path = config.default_error_path.unwrap_or("src");
-        fs::read(format!("{error_path}/{}.html", code.as_u16()))
+        let error_path = config.default_error_path.unwrap_or("/files/default_errors");
+        fs::read(format!(".{error_path}/{}.html", code.as_u16()))
     }
 }
