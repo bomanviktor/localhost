@@ -49,7 +49,7 @@ mod test_misc {
         let config = mock_server_config();
 
         let result = handle_method(&route, &request, &config);
-        assert!(matches!(result, Err(StatusCode::BAD_REQUEST)));
+        assert!(matches!(result, Err(StatusCode::NOT_IMPLEMENTED)));
     }
 
     #[test]

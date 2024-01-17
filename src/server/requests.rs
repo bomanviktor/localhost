@@ -181,7 +181,7 @@ pub mod version {
         let version_str = req
             .split_whitespace()
             .find(|s| s.contains("HTTP/"))
-            .unwrap_or("HTTP/1.1");
+            .ok_or(StatusCode::BAD_REQUEST)?;
 
         match version_str {
             "HTTP/0.9" => Ok(Version::HTTP_09),
@@ -265,8 +265,6 @@ pub mod body {
 }
 
 pub mod utils {
-    use crate::type_aliases::Bytes;
-
     /// `get_split_index` gets the `&str` at `index` after performing `split_whitespace`
     pub fn get_split_index(str: &str, index: usize) -> &str {
         let lines = str.split_whitespace().collect::<Vec<&str>>();
@@ -292,9 +290,5 @@ pub mod utils {
         } else {
             lines[index]
         }
-    }
-
-    pub fn to_bytes(str: &str) -> Bytes {
-        str.as_bytes().to_vec()
     }
 }

@@ -1,4 +1,3 @@
-use crate::server::utils::to_bytes;
 use crate::server::{Bytes, Response, ServerConfig, StatusCode};
 use http::header::TRANSFER_ENCODING;
 use http::Version;
@@ -23,7 +22,7 @@ pub unsafe fn format_response(response: Response<Bytes>) -> Bytes {
 
     resp.push_str("\r\n");
     if body.is_empty() {
-        return to_bytes(&resp);
+        return Bytes::from(resp);
     }
 
     // Make this dynamic
@@ -41,7 +40,7 @@ pub unsafe fn format_response(response: Response<Bytes>) -> Bytes {
         }
     }
 
-    to_bytes(&resp)
+    Bytes::from(resp)
 }
 fn is_chunked(head: http::response::Parts) -> bool {
     head.headers
@@ -148,7 +147,7 @@ pub mod errors {
     use http::header::{CONTENT_LENGTH, HOST};
 
     pub fn error(code: StatusCode, config: &ServerConfig) -> Response<Bytes> {
-        let error_body = check_errors(code, config).unwrap_or(to_bytes(&format!("{code}")));
+        let error_body = check_errors(code, config).unwrap_or(Bytes::from(format!("{code}")));
         Response::builder()
             .header(HOST, config.host)
             .header(CONTENT_LENGTH, error_body.len())

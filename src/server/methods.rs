@@ -42,12 +42,12 @@ pub fn handle_method(
         Method::PATCH => not_safe::patch(req, config),
         Method::DELETE => not_safe::delete(req, config),
         _ => {
-            // Managed to bypass allowed request methods. Send bad request response.
+            // Managed to bypass implemented request methods.
             log!(
                 LogFileType::Server,
-                format!("Bad request method: {}", &req.method())
+                format!("Not Implemented: {}", &req.method())
             );
-            Err(StatusCode::BAD_REQUEST)
+            Err(StatusCode::NOT_IMPLEMENTED)
         }
     }
 }
