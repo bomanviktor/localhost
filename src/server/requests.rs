@@ -20,16 +20,14 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
         }
     }
 
-    // Decapitate the request
-    let body_start_index = req_str.find("\r\n\r\n").unwrap_or(req_str.len());
-
-    let body_str = if req_str.contains("\r\n\r\n") {
-        &req_str[body_start_index + 4..] // "+ 4" to skip past "\r\n\r\n"
-    } else {
-        req_str
-    };
-
     let body = if headers::is_chunked(request_builder.headers_ref()) {
+        let body_start_index = req_str.find("\r\n\r\n").unwrap_or(req_str.len());
+        let body_str = if req_str.contains("\r\n\r\n") {
+            &req_str[body_start_index + 4..] // to skip past "\r\n\r\n"
+        } else {
+            req_str
+        };
+
         get_chunked_body(body_str, conf.body_size_limit)?
     } else {
         body::get_body(req_str, conf.body_size_limit)?

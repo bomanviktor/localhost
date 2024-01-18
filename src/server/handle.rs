@@ -11,24 +11,29 @@ use crate::server::*;
 use serve::*;
 
 pub fn handle_connection(stream: &mut TcpStream, config: &ServerConfig) -> io::Result<()> {
-    let mut buffer = [0; 1024];
+    let mut request_string = String::new();
+    let mut buffer = [0; 256];
 
-    // Read from stream
-    let bytes_read = stream.read(&mut buffer)?;
-
-    // Parse the request
-    let request_string = match String::from_utf8(buffer[..bytes_read].to_vec()) {
-        Ok(request_str) => request_str,
-        Err(e) => {
-            log!(
-                LogFileType::Server,
-                format!("Error reading from buffer to string: {e}")
-            );
-            return Ok(());
+    // Read into buffer
+    while let Ok(bytes_read) = stream.read(&mut buffer) {
+        if bytes_read == 0 {
+            break;
         }
-    };
+        match String::from_utf8(buffer[..bytes_read].to_vec()) {
+            Ok(str) => request_string.push_str(&str),
+            Err(_) => {
+                unsafe {
+                    // Insert the buffer into the request string
+                    request_string
+                        .push_str(&String::from_utf8_unchecked(buffer[..bytes_read].to_vec()));
+                }
+            }
+        }
+        // Clear the buffer
+        buffer = [0; 256];
+    }
 
-    // Match the request with a route
+    // Get the http::Request<String> type from the request string
     let request = match get_request(config, &request_string) {
         Ok(req) => req,
         Err(e) => {
@@ -37,12 +42,16 @@ pub fn handle_connection(stream: &mut TcpStream, config: &ServerConfig) -> io::R
         }
     };
 
-    // Handle redirections
+    // Get the route from the http::Request
     let route = match get_route(&request, config) {
         Ok(route) => route,
+
+        // Handle the redirections
         Err((code, path)) if code.is_redirection() => {
             return serve_response(stream, redirect(code, config, request.version(), path));
         }
+
+        // Handle the errors
         Err((code, _)) => {
             log!(LogFileType::Server, format!("Error: {}", &code));
             return serve_response(stream, error(code, config));
@@ -104,7 +113,6 @@ pub fn handle_connection(stream: &mut TcpStream, config: &ServerConfig) -> io::R
         };
     }
 
-    // Handle based on HTTP method
     match handle_method(&route, &request, config) {
         Ok(response) => serve_response(stream, response),
         Err(code) => {
