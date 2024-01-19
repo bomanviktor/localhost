@@ -257,16 +257,14 @@ pub mod body {
     // Function to split the byte slice at the first occurrence of delimiter1 and delimiter2
     fn split_once_str(data: &[u8], delimiter1: u8, delimiter2: u8) -> Option<(&[u8], &[u8])> {
         for (i, &byte) in data.iter().enumerate() {
-            if byte == delimiter1 {
-                let (chunk, rest) = data.split_at(i + 1);
-                if let Some((_, rest)) = rest.split_first() {
-                    let (next_chunk, _) = rest.split_at(
-                        rest.iter()
-                            .position(|&x| x == delimiter2)
-                            .unwrap_or(rest.len()),
-                    );
-                    return Some((chunk, next_chunk));
-                }
+            if i == data.len() {
+                return None;
+            }
+
+            if byte == delimiter1 && data[i + 1] == delimiter2 {
+                let chunk = &data[0..i];
+                let rest = data.split_at(i + 2).1;
+                return Some((chunk, rest));
             }
         }
         None

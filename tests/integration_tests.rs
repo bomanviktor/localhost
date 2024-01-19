@@ -1,7 +1,6 @@
 const HOST: &str = "http://127.0.0.1:8080";
 use common::setup;
 use reqwest;
-use std::thread;
 
 mod common;
 mod test_config {
@@ -16,6 +15,69 @@ mod test_config {
             assert!(!c.routes.is_empty());
         }
     }
+}
+
+use std::thread;
+
+mod binary_file {
+    use super::*;
+    use crate::common::{buffer_and_client, send_request, setup};
+    use localhost::type_aliases::Bytes;
+
+    fn check_response(valid: bool, response: reqwest::blocking::Response, buf: Bytes) {
+        if valid {
+            assert_eq!(response.status(), reqwest::StatusCode::OK);
+            assert!(response.content_length().unwrap() > buf.len() as u64);
+        } else {
+            assert_ne!(response.status(), reqwest::StatusCode::OK);
+        }
+    }
+    mod valid {
+        use super::*;
+        #[test]
+        fn post() {
+            thread::spawn(setup);
+            let (buf, client) = buffer_and_client("./files/tests/test.png");
+            let valid_endpoint = "/files/tests.png";
+
+            // Make sure the file does not exist.
+            send_request(
+                &client,
+                &format!("{HOST}{valid_endpoint}"),
+                buf.clone(),
+                http::Method::DELETE,
+            );
+
+            // Post
+            let response = send_request(
+                &client,
+                &format!("{HOST}{valid_endpoint}"),
+                buf.clone(),
+                http::Method::POST,
+            );
+
+            check_response(true, response, buf);
+        }
+
+        #[test]
+        fn put() {
+            thread::spawn(setup);
+            let (buf, client) = buffer_and_client("./files/tests/test.png");
+            let valid_endpoint = "/files/tests.png";
+
+            // Post and Delete
+            let response = send_request(
+                &client,
+                &format!("{HOST}{valid_endpoint}"),
+                buf.clone(),
+                http::Method::PUT,
+            );
+
+            check_response(true, response, buf);
+        }
+    }
+
+    mod invalid {}
 }
 
 mod chunked_encoding {
@@ -77,20 +139,5 @@ mod chunked_encoding {
 
         #[test]
         fn invalid() {}
-    }
-}
-
-#[allow(dead_code)]
-mod test_requests {
-    use http::StatusCode;
-    mod utils {
-        use super::*;
-        use localhost::server::utils::get_split_index;
-        use std::str::FromStr;
-
-        pub fn get_status(header: &str) -> StatusCode {
-            let status = get_split_index(header, 1);
-            StatusCode::from_str(status).unwrap_or(StatusCode::OK)
-        }
     }
 }

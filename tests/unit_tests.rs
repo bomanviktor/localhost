@@ -12,8 +12,6 @@ use localhost::{
         ServerConfig,
     },
 };
-
-const PUT_ROUTE: usize = 3;
 mod test_misc {
     use super::*;
     use rand::distributions::Alphanumeric;

@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use crate::log;
 use crate::log::*;
 use crate::server::errors::error;
@@ -9,6 +7,7 @@ use crate::server::redirections::redirect;
 use crate::server::safe::get;
 use crate::server::*;
 use serve::*;
+use std::path::Path;
 
 const KB: usize = 1024;
 const BUFFER_SIZE: usize = KB;
@@ -141,7 +140,7 @@ unsafe fn parse_http_request(stream: &mut TcpStream) -> Result<(String, Vec<u8>)
             Err(_) => {
                 unsafe {
                     let rest = String::from_utf8_unchecked(buffer.to_vec());
-                    let index = rest.find("\r\n\r\n").unwrap();
+                    let index = rest.find("\r\n\r\n").unwrap_or(0);
                     head.push_str(rest.split_at(index).0);
                     body.extend(&buffer[index + 4..bytes_read]);
                 }
@@ -155,7 +154,10 @@ unsafe fn parse_http_request(stream: &mut TcpStream) -> Result<(String, Vec<u8>)
     buffer = [0; BUFFER_SIZE];
 
     loop {
-        let bytes_read = stream.read(&mut buffer).map_err(|_| line!())?;
+        let bytes_read = match stream.read(&mut buffer) {
+            Ok(b) => b,
+            Err(_) => return Ok((head, body)),
+        };
         body.extend(buffer);
         if bytes_read < BUFFER_SIZE {
             break;
