@@ -20,14 +20,12 @@ pub fn handle_connection(stream: &mut TcpStream, config: &ServerConfig) -> io::R
             break;
         }
         match String::from_utf8(buffer[..bytes_read].to_vec()) {
+            // Insert the buffer into the request string
             Ok(str) => request_string.push_str(&str),
-            Err(_) => {
-                unsafe {
-                    // Insert the buffer into the request string
-                    request_string
-                        .push_str(&String::from_utf8_unchecked(buffer[..bytes_read].to_vec()));
-                }
-            }
+            Err(_) => unsafe {
+                request_string
+                    .push_str(&String::from_utf8_unchecked(buffer[..bytes_read].to_vec()));
+            },
         }
         // Clear the buffer
         buffer = [0; 256];
@@ -141,7 +139,7 @@ mod serve {
     use std::{fs, io};
 
     pub fn serve_response(stream: &mut TcpStream, response: Response<Bytes>) -> io::Result<()> {
-        let formatted_response = unsafe { format_response(response.clone()) };
+        let formatted_response = format_response(response.clone());
         let total_size = formatted_response.len();
         let mut written_size = 0;
 
