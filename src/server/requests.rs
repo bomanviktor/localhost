@@ -1,11 +1,17 @@
 use crate::log;
 use crate::log::*;
 use crate::server::{Request, Route, ServerConfig, StatusCode};
+use crate::type_aliases::Bytes;
 
-pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>, StatusCode> {
-    let version = version::get_version(req_str)?;
-    let path = path::get_path(req_str);
-    let method = super::get_method(req_str)?;
+pub fn get_request(
+    conf: &ServerConfig,
+    request_parts: (String, Bytes),
+) -> Result<Request<Bytes>, StatusCode> {
+    let head = &request_parts.0;
+    let body = request_parts.1;
+    let version = version::get_version(head)?;
+    let path = path::get_path(head);
+    let method = super::get_method(head)?;
 
     // Constructing the request with parsed headers and body
     let mut request_builder = http::Request::builder()
@@ -13,7 +19,7 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
         .uri(path)
         .version(version);
 
-    for header in headers::get_headers(req_str) {
+    for header in headers::get_headers(head) {
         if let Some((key, value)) = headers::format_header(header) {
             request_builder =
                 request_builder.header(key.to_ascii_lowercase(), value.to_ascii_lowercase());
@@ -21,16 +27,9 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
     }
 
     let body = if headers::is_chunked(request_builder.headers_ref()) {
-        let body_start_index = req_str.find("\r\n\r\n").unwrap_or(req_str.len());
-        let body_str = if req_str.contains("\r\n\r\n") {
-            &req_str[body_start_index + 4..] // to skip past "\r\n\r\n"
-        } else {
-            req_str
-        };
-
-        get_chunked_body(body_str, conf.body_size_limit)?
+        body::get_chunked_body(body, conf.body_size_limit)?
     } else {
-        body::get_body(req_str, conf.body_size_limit)?
+        body::get_body(body, conf.body_size_limit)?
     };
 
     match request_builder.body(body) {
@@ -43,66 +42,6 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
             Err(StatusCode::BAD_REQUEST)
         }
     }
-}
-
-fn get_chunked_body(body_str: &str, limit: usize) -> Result<String, StatusCode> {
-    let mut body = String::new();
-    let mut remaining_str = body_str;
-
-    while !remaining_str.is_empty() {
-        // Split at the first occurrence of CRLF
-        if let Some((size_str, rest)) = remaining_str.split_once("\r\n") {
-            // Parse the chunk size
-            let chunk_size = match usize::from_str_radix(size_str.trim(), 16) {
-                Ok(size) => size,
-                Err(size) => {
-                    log!(
-                        LogFileType::Server,
-                        format!("Error: Failed to get chunk size {}", size)
-                    );
-                    return Err(StatusCode::BAD_REQUEST);
-                }
-            };
-
-            // Check for the end of the chunked body
-            if chunk_size == 0 {
-                break;
-            }
-
-            // Ensure there's enough data for the chunk
-            if rest.len() < chunk_size {
-                log!(
-                    LogFileType::Server,
-                    format!("Error: Not enough data for chunk {}", rest.len())
-                );
-                return Err(StatusCode::BAD_REQUEST);
-            }
-
-            // Extract the chunk data
-            let (chunk_data, after_chunk) = rest.split_at(chunk_size);
-            body.push_str(chunk_data);
-
-            // Check body size limit
-            if body.len() > limit {
-                log!(
-                    LogFileType::Server,
-                    format!("Error: body too long {}", body.len())
-                );
-                return Err(StatusCode::PAYLOAD_TOO_LARGE);
-            }
-
-            // Prepare for the next iteration, skip past the chunk data and CRLF
-            remaining_str = &after_chunk[2..]; // Assumes CRLF is always present
-        } else {
-            log!(
-                LogFileType::Server,
-                "Error: Missing CRLF after chunk size".to_string()
-            );
-            return Err(StatusCode::BAD_REQUEST); // Missing CRLF after chunk size
-        }
-    }
-
-    Ok(body)
 }
 
 pub mod path {
@@ -244,21 +183,93 @@ pub mod headers {
 }
 
 pub mod body {
+    use crate::log;
+    use crate::log::LogFileType;
+    use crate::type_aliases::Bytes;
     use http::StatusCode;
 
-    pub fn get_body(req: &str, limit: usize) -> Result<String, StatusCode> {
-        let body = req
-            .trim_end_matches('\0')
-            .split("\r\n\r\n")
-            .skip(1)
-            .collect::<Vec<&str>>()
-            .join("\r\n\r\n");
-
+    pub fn get_body(body: Bytes, limit: usize) -> Result<Bytes, StatusCode> {
         if body.len() <= limit {
             Ok(body)
         } else {
             Err(StatusCode::PAYLOAD_TOO_LARGE)
         }
+    }
+
+    pub(crate) fn get_chunked_body(body: Bytes, limit: usize) -> Result<Bytes, StatusCode> {
+        let mut result_body = Vec::new();
+        let mut remaining_data = &body[..];
+
+        while !remaining_data.is_empty() {
+            // Split at the first occurrence of CRLF
+            if let Some((size_str, rest)) = split_once_str(remaining_data, b'\r', b'\n') {
+                // Parse the chunk size
+                let chunk_size =
+                    match usize::from_str_radix(String::from_utf8_lossy(size_str).trim(), 16) {
+                        Ok(size) => size,
+                        Err(_) => {
+                            log!(
+                                LogFileType::Server,
+                                "Error: Failed to parse chunk size".to_string()
+                            );
+                            return Err(StatusCode::BAD_REQUEST);
+                        }
+                    };
+
+                // Check for the end of the chunked body
+                if chunk_size == 0 {
+                    break;
+                }
+
+                // Ensure there's enough data for the chunk
+                if rest.len() < chunk_size + 2 {
+                    log!(
+                        LogFileType::Server,
+                        "Error: Not enough data for chunk".to_string()
+                    );
+                    return Err(StatusCode::BAD_REQUEST);
+                }
+
+                // Extract the chunk data
+                let (chunk_data, after_chunk) = rest.split_at(chunk_size);
+                result_body.extend_from_slice(chunk_data);
+
+                // Check body size limit
+                if result_body.len() > limit {
+                    log!(LogFileType::Server, "Error: Body too long".to_string());
+                    return Err(StatusCode::PAYLOAD_TOO_LARGE);
+                }
+
+                // Prepare for the next iteration, skip past the chunk data and CRLF
+                remaining_data = &after_chunk[2..];
+            } else {
+                log!(
+                    LogFileType::Server,
+                    "Error: Missing CRLF after chunk size".to_string()
+                );
+                return Err(StatusCode::BAD_REQUEST); // Missing CRLF after chunk size
+            }
+        }
+
+        Ok(result_body)
+    }
+
+    // Function to split the byte slice at the first occurrence of delimiter1 and delimiter2
+    fn split_once_str(data: &[u8], delimiter1: u8, delimiter2: u8) -> Option<(&[u8], &[u8])> {
+        for (i, &byte) in data.iter().enumerate() {
+            if byte == delimiter1 {
+                let (chunk, rest) = data.split_at(i + 1);
+                if let Some((_, rest)) = rest.split_first() {
+                    let (next_chunk, _) = rest.split_at(
+                        rest.iter()
+                            .position(|&x| x == delimiter2)
+                            .unwrap_or(rest.len()),
+                    );
+                    return Some((chunk, next_chunk));
+                }
+            }
+        }
+        None
     }
 }
 

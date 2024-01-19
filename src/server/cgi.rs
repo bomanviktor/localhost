@@ -48,7 +48,7 @@ pub fn is_cgi_request(path: &str) -> bool {
 
 const STANDARD_HEADERS: [HeaderName; 1] = [TRANSFER_ENCODING];
 pub fn execute_cgi_script(
-    req: &Request<String>,
+    req: &Request<Bytes>,
     config: &ServerConfig,
 ) -> Result<Response<Bytes>, StatusCode> {
     let route = &get_route(req, config).unwrap();
@@ -62,7 +62,10 @@ pub fn execute_cgi_script(
     }
 
     let full_path = add_root_to_path(route, req.uri().path());
-    let body = req.body().to_string();
+    let body = match String::from_utf8(req.body().clone()) {
+        Ok(b) => b,
+        Err(_) => return Err(StatusCode::BAD_REQUEST),
+    };
     let extension = full_path.split('.').rev().collect::<Vec<&str>>()[0].trim_end();
 
     let mut file_extension = String::new();
@@ -190,7 +193,7 @@ pub fn execute_cgi_script(
     Ok(response)
 }
 
-fn add_env_variables(req: &Request<String>, config: &ServerConfig, file_extension: FileExtension) {
+fn add_env_variables(req: &Request<Bytes>, config: &ServerConfig, file_extension: FileExtension) {
     add_http_variables(req.headers());
     if let Some(query) = req.uri().query() {
         env::set_var("QUERY_STRING", query);

@@ -4,6 +4,7 @@ use http::{
     header::{CONTENT_LENGTH, CONTENT_TYPE},
     Method, Request, StatusCode,
 };
+use localhost::type_aliases::Bytes;
 use localhost::{
     server::{content_type, get_method, handle_method, method_is_allowed},
     server_config::{
@@ -11,6 +12,8 @@ use localhost::{
         ServerConfig,
     },
 };
+
+const PUT_ROUTE: usize = 3;
 mod test_misc {
     use super::*;
     use rand::distributions::Alphanumeric;
@@ -315,11 +318,11 @@ fn mock_route() -> Route<'static> {
     route
 }
 
-fn mock_request(method: Method, path: &str, body: Option<&str>) -> Request<String> {
+fn mock_request(method: Method, path: &str, body: Option<&str>) -> Request<Bytes> {
     Request::builder()
         .method(method)
         .uri(format!("http://localhost:8080{path}"))
-        .body(body.unwrap_or_default().to_string())
+        .body(Bytes::from(body.unwrap_or_default()))
         .unwrap()
 }
 

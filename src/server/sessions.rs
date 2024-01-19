@@ -9,7 +9,7 @@ use http::{HeaderValue, Request, Response, StatusCode};
 type Cookie = str;
 
 pub fn update_cookie(
-    req: &Request<String>,
+    req: &Request<Bytes>,
     conf: &ServerConfig,
 ) -> Result<Response<Bytes>, StatusCode> {
     // Replace with
@@ -59,7 +59,7 @@ pub fn update_cookie(
 }
 
 pub fn validate_cookie(
-    req: &Request<String>,
+    req: &Request<Bytes>,
     conf: &ServerConfig,
 ) -> Result<Response<Bytes>, StatusCode> {
     let value = match get_cookie(req, "grit:lab-cookie") {
@@ -115,7 +115,7 @@ pub fn cookie(resp: Builder, value: &Cookie) -> Builder {
     resp.header(COOKIE, value)
 }
 
-pub fn get_cookie<'a>(req: &'a Request<String>, value: &'a Cookie) -> Option<&'a HeaderValue> {
+pub fn get_cookie<'a>(req: &'a Request<Bytes>, value: &'a Cookie) -> Option<&'a HeaderValue> {
     req.headers()
         .get_all(COOKIE)
         .iter()

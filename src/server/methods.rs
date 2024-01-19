@@ -26,7 +26,7 @@ pub fn method_is_allowed(method: &Method, route: &Route) -> bool {
 
 pub fn handle_method(
     route: &Route,
-    req: &Request<String>,
+    req: &Request<Bytes>,
     config: &ServerConfig,
 ) -> Result<Response<Bytes>, StatusCode> {
     match *req.method() {
@@ -63,10 +63,7 @@ pub mod safe {
     ///
     /// Make sure you adjust this to get the desired behaviour for get requests.
     const STANDARD_HEADERS: [HeaderName; 1] = [TRANSFER_ENCODING];
-    pub fn get(
-        req: &Request<String>,
-        config: &ServerConfig,
-    ) -> Result<Response<Bytes>, StatusCode> {
+    pub fn get(req: &Request<Bytes>, config: &ServerConfig) -> Result<Response<Bytes>, StatusCode> {
         let route = match get_route(req, config) {
             Ok(route) => route,
             _ => {
@@ -107,7 +104,7 @@ pub mod safe {
     }
 
     pub fn head(
-        req: &Request<String>,
+        req: &Request<Bytes>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
@@ -134,7 +131,7 @@ pub mod safe {
     }
 
     pub fn trace(
-        req: &Request<String>,
+        req: &Request<Bytes>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         // Check the Max-Forwards header
@@ -176,7 +173,7 @@ pub mod safe {
 
     pub fn options(
         route: &Route,
-        req: &Request<String>,
+        req: &Request<Bytes>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let allowed_methods = route
@@ -210,7 +207,7 @@ mod not_safe {
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     }
     pub fn post(
-        req: &Request<String>,
+        req: &Request<Bytes>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = match get_route(req, config) {
@@ -224,7 +221,7 @@ mod not_safe {
             }
         };
         let path = &add_root_to_path(&route, req.uri().path());
-        let body = req.body().as_bytes().to_vec();
+        let body = req.body().to_vec();
 
         let resp = unsafe_response(path, body.clone())?;
 
@@ -260,13 +257,10 @@ mod not_safe {
         }
     }
 
-    pub fn put(
-        req: &Request<String>,
-        config: &ServerConfig,
-    ) -> Result<Response<Bytes>, StatusCode> {
+    pub fn put(req: &Request<Bytes>, config: &ServerConfig) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
         let path = &add_root_to_path(route, req.uri().path());
-        let body = req.body().as_bytes().to_vec();
+        let body = req.body().to_vec();
 
         if let Err(e) = fs::write(path, &body) {
             log!(LogFileType::Server, format!("Error: {e}"));
@@ -276,12 +270,12 @@ mod not_safe {
     }
 
     pub fn patch(
-        req: &Request<String>,
+        req: &Request<Bytes>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
         let path = &add_root_to_path(route, req.uri().path());
-        let body = req.body().as_bytes().to_vec();
+        let body = req.body().to_vec();
 
         if fs::metadata(path).is_err() {
             log!(
@@ -300,7 +294,7 @@ mod not_safe {
     }
 
     pub fn delete(
-        req: &Request<String>,
+        req: &Request<Bytes>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
@@ -308,10 +302,7 @@ mod not_safe {
         let body = match fs::read(path) {
             Ok(bytes) => bytes,
             Err(e) => {
-                log!(
-                    LogFileType::Server,
-                    format!("Failed to read body: {}. Error: {e}", &req.body())
-                );
+                log!(LogFileType::Server, format!("Error: {e}"));
                 return Err(StatusCode::NOT_FOUND);
             }
         };

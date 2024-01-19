@@ -10,29 +10,22 @@ use crate::server::safe::get;
 use crate::server::*;
 use serve::*;
 
+const KB: usize = 1024;
+const BUFFER_SIZE: usize = KB;
 pub fn handle_connection(stream: &mut TcpStream, config: &ServerConfig) -> io::Result<()> {
-    let mut request_string = String::new();
-    let mut buffer = [0; 256];
-
-    // Read into buffer
-    while let Ok(bytes_read) = stream.read(&mut buffer) {
-        if bytes_read == 0 {
-            break;
+    let request_parts = match unsafe { parse_http_request(stream) } {
+        Ok(parts) => parts,
+        Err(e) => {
+            log!(
+                LogFileType::Server,
+                format!("Could not read bytes on line {e} ")
+            );
+            return serve_response(stream, error(StatusCode::BAD_REQUEST, config));
         }
-        match String::from_utf8(buffer[..bytes_read].to_vec()) {
-            // Insert the buffer into the request string
-            Ok(str) => request_string.push_str(&str),
-            Err(_) => unsafe {
-                request_string
-                    .push_str(&String::from_utf8_unchecked(buffer[..bytes_read].to_vec()));
-            },
-        }
-        // Clear the buffer
-        buffer = [0; 256];
-    }
+    };
 
     // Get the http::Request<String> type from the request string
-    let request = match get_request(config, &request_string) {
+    let request = match get_request(config, request_parts.clone()) {
         Ok(req) => req,
         Err(e) => {
             log!(LogFileType::Server, format!("Error: {}", e));
@@ -76,10 +69,10 @@ pub fn handle_connection(stream: &mut TcpStream, config: &ServerConfig) -> io::R
         // Serve the default file if enabled in config
         if let Some(default_file) = settings.default_if_url_is_dir {
             let default_path = &add_root_to_path(&route, default_file);
-            let request_string =
-                replace_path_in_request(&request_string, request.uri().path(), default_path);
-
-            let request = match get_request(config, &request_string) {
+            let new_head =
+                replace_path_in_request(request_parts.0, request.uri().path(), default_path);
+            let request_parts = (new_head, request_parts.1);
+            let request = match get_request(config, request_parts) {
                 Ok(r) => r,
                 Err(code) => {
                     log!(LogFileType::Server, code.to_string());
@@ -120,11 +113,65 @@ pub fn handle_connection(stream: &mut TcpStream, config: &ServerConfig) -> io::R
     }
 }
 
-fn replace_path_in_request(req_string: &str, path: &str, default_path: &str) -> String {
+unsafe fn parse_http_request(stream: &mut TcpStream) -> Result<(String, Vec<u8>), u32> {
+    let mut buffer = [0; BUFFER_SIZE];
+    let mut head = String::new();
+    let mut body = Vec::new();
+
+    // Get the head and first bytes of the body
+    loop {
+        let bytes_read = stream.read(&mut buffer).map_err(|_| line!())?;
+
+        if bytes_read == 0 {
+            return Ok((head, body));
+        }
+
+        match String::from_utf8(buffer[..bytes_read].to_vec()) {
+            Ok(chunk) => {
+                if let Some(index) = chunk.find("\r\n\r\n") {
+                    // Split head and body when finding the double CRLF (Carriage Return Line Feed)
+                    head.push_str(&chunk[..index]);
+                    body.extend(&buffer[index + 4..bytes_read]);
+                    break;
+                } else {
+                    // If no double CRLF found, add the entire chunk to the head
+                    head.push_str(&chunk);
+                }
+            }
+            Err(_) => {
+                unsafe {
+                    let rest = String::from_utf8_unchecked(buffer.to_vec());
+                    let index = rest.find("\r\n\r\n").unwrap();
+                    head.push_str(rest.split_at(index).0);
+                    body.extend(&buffer[index + 4..bytes_read]);
+                }
+                break;
+            }
+        }
+        // Clear the buffer
+        buffer = [0; BUFFER_SIZE];
+    }
+
+    buffer = [0; BUFFER_SIZE];
+
+    loop {
+        let bytes_read = stream.read(&mut buffer).map_err(|_| line!())?;
+        body.extend(buffer);
+        if bytes_read < BUFFER_SIZE {
+            break;
+        }
+
+        buffer = [0; BUFFER_SIZE];
+    }
+
+    Ok((head, body))
+}
+
+fn replace_path_in_request(head: String, path: &str, default_path: &str) -> String {
     return if let Some(stripped_path) = path.strip_prefix('.') {
-        req_string.replacen(stripped_path, &default_path[1..], 1)
+        head.replacen(stripped_path, &default_path[1..], 1)
     } else {
-        req_string.replacen(path, &default_path[1..], 1)
+        head.replacen(path, &default_path[1..], 1)
     };
 }
 
