@@ -90,10 +90,18 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 }),
             },
             Route {
-                path: "/test",
+                url_path: "/tests",
                 methods: vec![http::Method::GET, http::Method::POST],
                 handler: None,
-                settings: None,
+                settings: Some(Settings {
+                    http_redirections: None,
+                    redirect_status_code: None,
+                    root_path: Some("/files"),
+                    default_if_url_is_dir: Some("/dir.html"),
+                    default_if_request_is_dir: None,
+                    cgi_def: None,
+                    list_directory: true,
+                }),
             },
         ],
     }]

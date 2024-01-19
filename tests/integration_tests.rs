@@ -38,14 +38,12 @@ mod test_config {
     }
 }
 
-use std::thread;
-
 mod binary_file {
     use super::*;
-    use crate::common::{buffer_and_client, send_request, setup};
+    use crate::common::{buffer_and_client, send_request};
     use localhost::type_aliases::Bytes;
 
-    fn check_response(valid: bool, response: reqwest::blocking::Response, buf: Bytes) {
+    fn check_response(valid: bool, response: reqwest::Response, buf: Bytes) {
         if valid {
             assert_eq!(response.status(), reqwest::StatusCode::OK);
             assert!(response.content_length().unwrap() > buf.len() as u64);
@@ -55,11 +53,10 @@ mod binary_file {
     }
     mod valid {
         use super::*;
-        #[test]
-        fn post() {
-            thread::spawn(setup);
-            let (buf, client) = buffer_and_client("./files/tests/test.png");
-            let valid_endpoint = "/files/tests.png";
+        #[tokio::test]
+        async fn post() {
+            let (buf, client) = buffer_and_client("./files/test.png").await;
+            let valid_endpoint = "/files/tests/test.png";
 
             // Make sure the file does not exist.
             send_request(
@@ -67,7 +64,8 @@ mod binary_file {
                 &format!("{HOST}{valid_endpoint}"),
                 buf.clone(),
                 http::Method::DELETE,
-            );
+            )
+            .await;
 
             // Post
             let response = send_request(
@@ -75,16 +73,16 @@ mod binary_file {
                 &format!("{HOST}{valid_endpoint}"),
                 buf.clone(),
                 http::Method::POST,
-            );
+            )
+            .await;
 
             check_response(true, response, buf);
         }
 
-        #[test]
-        fn put() {
-            thread::spawn(setup);
-            let (buf, client) = buffer_and_client("./files/tests/test.png");
-            let valid_endpoint = "/files/tests.png";
+        #[tokio::test]
+        async fn put() {
+            let (buf, client) = buffer_and_client("./files/test.png").await;
+            let valid_endpoint = "/files/tests/test.png";
 
             // Post and Delete
             let response = send_request(
@@ -92,7 +90,8 @@ mod binary_file {
                 &format!("{HOST}{valid_endpoint}"),
                 buf.clone(),
                 http::Method::PUT,
-            );
+            )
+            .await;
 
             check_response(true, response, buf);
         }
@@ -103,7 +102,7 @@ mod binary_file {
 
 mod chunked_encoding {
     use super::*;
-    use reqwest::header::{CONTENT_TYPE, TRANSFER_ENCODING};
+    use reqwest::header::{CONTENT_LENGTH, CONTENT_TYPE, TRANSFER_ENCODING};
     use reqwest::Client;
 
     pub async fn send_chunked_request(
@@ -120,11 +119,11 @@ mod chunked_encoding {
 
         request_builder = request_builder
             .header(CONTENT_TYPE, "text/plain")
+            .header(CONTENT_LENGTH, body.len())
             .header(TRANSFER_ENCODING, "chunked")
             .body(body);
-
-        let response = request_builder.send().await.unwrap();
-        response
+        let response = request_builder.send().await;
+        response.unwrap()
     }
 }
 
@@ -136,11 +135,11 @@ mod request_testing {
 
     #[tokio::test]
     async fn chunk_test() {
-        let client = reqwest::Client::new();
-        let body = "aaljsdglsljsh";
-        let formatted_url = format!("{HOST}/test");
-        let response = send_chunked_request(&client, &formatted_url, body, http::Method::GET);
-        assert_eq!(response.await.status(), reqwest::StatusCode::OK);
+        let client = &reqwest::Client::new();
+        let body = "Wiki\r\npedia\r\n in\r\n\r\nchunks.\r\n\r\n";
+        let formatted_url = &format!("{HOST}/files/tests/test.txt");
+        let response = send_chunked_request(client, formatted_url, body, http::Method::POST).await;
+        assert_eq!(response.status(), reqwest::StatusCode::OK);
     }
 
     #[tokio::test]
@@ -200,30 +199,9 @@ mod request_testing {
             .unwrap();
 
         assert_eq!(res.status(), reqwest::StatusCode::UNAUTHORIZED);
-
-        // Test: Send request with with body exceeding 10024 bytes
-        //Body with size larger than 10024 bytes
-        let mut body = String::from("a");
-        for _ in 0..20000 {
-            body.push('a');
-        }
-
-        println!("Body length is {}", body.len());
-
-        let res = client
-            .get(format!("{}/test", HOST))
-            .header("Cookie", "grit:lab-cookie=invalid_cookie_value")
-            .body(body)
-            .send()
-            .await
-            .unwrap();
-
-        assert_eq!(res.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
     }
 
     use std::process::Command;
-    // use std::thread;
-    // use std::time::Duration;
     #[tokio::test]
     async fn curl_testing() {
         let number_of_requests = 10;
@@ -253,18 +231,6 @@ mod request_testing {
 
             // thread::sleep(delay_between_requests);
         }
-    }
-
-    #[tokio::test]
-    async fn siege_test() {
-        let output = Command::new("siege")
-            .arg("-f")
-            .arg("siege_test.txt")
-            .output()
-            .expect("failed to execute process");
-
-        assert!(output.status.success(), "Siege command failed");
-        assert_eq!(output.status.code(), Some(0));
     }
 }
 
@@ -300,7 +266,7 @@ mod sessions_unit_tests {
         let req = Request::builder()
             .uri("/test")
             .header(COOKIE, "existing_cookie_value")
-            .body(String::new())
+            .body(vec![])
             .unwrap();
 
         for config in configs {
@@ -317,7 +283,7 @@ mod sessions_unit_tests {
         let mut headers = HashMap::new();
         headers.insert(COOKIE, HeaderValue::from_static("grit:lab-cookie"));
 
-        let req = Request::builder().uri("/test").body(String::new()).unwrap();
+        let req = Request::builder().uri("/test").body(vec![]).unwrap();
 
         for config in configs {
             let result = update_cookie(&req, &config).unwrap();

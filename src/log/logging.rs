@@ -75,10 +75,11 @@ pub fn log_with_file_line(
         .expect("Unable to write to file");
 }
 
-// Macro to simplify logging
-// Usage example
-// log!(LogFileType::Server, "This is a test log message");
-// log!(LogFileType::Client, "This is a test log message");
+/// # log!
+///
+/// Usage:
+///
+/// `log!(LogFileType, "This is a test log message");`
 #[macro_export]
 macro_rules! log {
     ($file_type:expr, $log_message:expr) => {

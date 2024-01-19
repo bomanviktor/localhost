@@ -1,7 +1,7 @@
 use localhost::log::init_logs;
 use localhost::server::{content_type, servers, start};
-use reqwest::blocking::Client;
 use reqwest::header::CONTENT_TYPE;
+use reqwest::{Client, Response};
 use std::fs::File;
 use std::io::Read;
 use std::thread;
@@ -14,12 +14,12 @@ pub fn setup() {
     });
 }
 
-pub fn send_request(
+pub async fn send_request(
     client: &Client,
     url: &str,
     body: Vec<u8>,
     method: http::Method,
-) -> reqwest::blocking::Response {
+) -> Response {
     let mut request_builder = match method {
         // UNSAFE
         http::Method::POST => client.post(url),
@@ -36,11 +36,11 @@ pub fn send_request(
         .header(CONTENT_TYPE, content_type(url))
         .body(body);
 
-    let response = request_builder.send().unwrap();
+    let response = request_builder.send().await.unwrap();
     response
 }
 
-pub fn buffer_and_client(path: &str) -> (Vec<u8>, Client) {
+pub async fn buffer_and_client(path: &str) -> (Vec<u8>, Client) {
     let mut file = File::open(path).unwrap();
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).unwrap();
