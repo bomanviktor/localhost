@@ -1,4 +1,4 @@
-use crate::server::{Bytes, Response, ServerConfig, StatusCode};
+use crate::server::{Bytes, Response, ServerConfig, StatusCode, BUFFER_SIZE};
 use http::header::TRANSFER_ENCODING;
 use http::Version;
 use std::fs;
@@ -22,7 +22,11 @@ pub fn format_response(response: Response<Bytes>) -> Bytes {
         return resp;
     }
 
-    let chunk_size = body.len() / 10;
+    let chunk_size = if body.len() < BUFFER_SIZE {
+        body.len()
+    } else {
+        BUFFER_SIZE
+    };
     if is_chunked(head) {
         for chunk in body.chunks(chunk_size) {
             resp.extend(format!("{:X}\r\n", chunk.len()).as_bytes());
@@ -87,13 +91,12 @@ pub fn content_type(path: &str) -> String {
     }
     .to_string()
 }
-
 pub mod informational {
     use super::*;
     use http::header::HOST;
 
     #[allow(dead_code)]
-    fn informational(
+    pub fn informational(
         status: StatusCode,
         config: &ServerConfig,
         version: Version,

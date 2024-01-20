@@ -1,17 +1,13 @@
 use std::fs;
+mod mock;
+use mock::*;
 
 use http::{
     header::{CONTENT_LENGTH, CONTENT_TYPE},
-    Method, Request, StatusCode,
+    Method, StatusCode,
 };
-use localhost::type_aliases::Bytes;
-use localhost::{
-    server::{content_type, get_method, handle_method, method_is_allowed},
-    server_config::{
-        route::{Route, Settings},
-        ServerConfig,
-    },
-};
+
+use localhost::server::{content_type, get_method, handle_method, method_is_allowed};
 mod test_misc {
     use super::*;
     use rand::distributions::Alphanumeric;
@@ -46,6 +42,7 @@ mod test_misc {
             Method::from_bytes(b"UNSUPPORTED").unwrap(),
             "/test.txt",
             None,
+            None,
         );
         let config = mock_server_config();
 
@@ -76,7 +73,7 @@ mod test_get {
     fn test_handle_method_get() {
         let route = mock_route();
         let config = mock_server_config();
-        let request = mock_request(Method::GET, "/test.txt", None);
+        let request = mock_request(Method::GET, "/test.txt", None, None);
 
         let result = handle_method(&route, &request, &config);
         assert!(result.is_ok());
@@ -97,6 +94,7 @@ mod test_post {
             Method::POST,
             "/test.txt",
             Some("Ehm... missing post tests here"),
+            None,
         );
 
         let result = handle_method(&route, &request, &config);
@@ -112,7 +110,7 @@ mod test_head {
     #[test]
     fn test_handle_method_head() {
         let route = mock_route();
-        let request = mock_request(Method::HEAD, "/test.txt", None);
+        let request = mock_request(Method::HEAD, "/test.txt", None, None);
         let config = mock_server_config();
 
         let result = handle_method(&route, &request, &config);
@@ -132,7 +130,7 @@ mod test_options {
     fn test_handle_method_options() {
         let route = mock_route();
         let config = mock_server_config();
-        let request = mock_request(Method::OPTIONS, "/test.txt", None);
+        let request = mock_request(Method::OPTIONS, "/test.txt", None, None);
 
         let result = handle_method(&route, &request, &config);
         assert!(result.is_ok());
@@ -153,7 +151,7 @@ mod test_trace {
         let config = mock_server_config();
         let route = mock_route();
 
-        let mut request = mock_request(Method::TRACE, "/test.txt", None);
+        let mut request = mock_request(Method::TRACE, "/test.txt", None, None);
         let headers = HashMap::from([
             ("Max-Forwards", "10"),
             ("Cookie", "test_cookie"),
@@ -193,7 +191,7 @@ fn test_handle_method_put() {
     let test_body_content = "Test PUT content kek";
     // Construct a new Uri with the test file path
 
-    let request = mock_request(Method::PUT, test_file_path, Some(test_body_content));
+    let request = mock_request(Method::PUT, test_file_path, Some(test_body_content), None);
 
     // Execute the PUT request
     let result = handle_method(&route, &request, &config);
@@ -238,12 +236,13 @@ mod test_patch {
         let test_file_path = "/patch_test.txt";
         let initial_content = "Initial Content";
         let modified_content = "Modified Content";
-        let put_request = mock_request(Method::PUT, test_file_path, Some(initial_content));
+        let put_request = mock_request(Method::PUT, test_file_path, Some(initial_content), None);
         let put_result = handle_method(&route, &put_request, &config);
         assert!(put_result.is_ok());
 
         // Step 2: Modify the file content using PATCH
-        let patch_request = mock_request(Method::PATCH, test_file_path, Some(modified_content));
+        let patch_request =
+            mock_request(Method::PATCH, test_file_path, Some(modified_content), None);
         let body = match handle_method(&route, &patch_request, &config) {
             Ok(resp) => resp.body().clone(),
             _ => panic!(),
@@ -265,19 +264,19 @@ fn test_handle_method_delete_existing_file() {
     // Create a file using PUT
     let test_file_path = "/delete_test.txt";
     let test_content = "Test Content";
-    let put_request = mock_request(Method::PUT, test_file_path, Some(test_content));
+    let put_request = mock_request(Method::PUT, test_file_path, Some(test_content), None);
     assert!(handle_method(&route, &put_request, &config).is_ok());
 
     // Retrieve the file using GET
-    let get_request = mock_request(Method::GET, test_file_path, None);
+    let get_request = mock_request(Method::GET, test_file_path, None, None);
     assert!(handle_method(&route, &get_request, &config).is_ok());
 
     // Delete the file using DELETE
-    let delete_request = mock_request(Method::DELETE, test_file_path, None);
+    let delete_request = mock_request(Method::DELETE, test_file_path, None, None);
     assert!(handle_method(&route, &delete_request, &config).is_ok());
 
     // Attempt to retrieve the file again using GET
-    let get_request_again = mock_request(Method::GET, test_file_path, None);
+    let get_request_again = mock_request(Method::GET, test_file_path, None, None);
     assert!(matches!(
         handle_method(&route, &get_request_again, &config),
         Err(StatusCode::NOT_FOUND)
@@ -290,163 +289,7 @@ fn test_handle_method_delete_non_existing_file() {
     let config = mock_server_config();
 
     let test_file_path = "/non_existing_file.txt";
-    let delete_request = mock_request(Method::DELETE, test_file_path, None);
+    let delete_request = mock_request(Method::DELETE, test_file_path, None, None);
     let result = handle_method(&route, &delete_request, &config);
     assert!(matches!(result, Err(StatusCode::NOT_FOUND)));
-}
-
-// Mock functions and data for testing
-fn mock_route() -> Route<'static> {
-    let route = Route {
-        methods: vec![
-            Method::GET,
-            Method::OPTIONS,
-            Method::HEAD,
-            Method::TRACE,
-            Method::POST,
-            Method::PUT,
-            Method::PATCH,
-            Method::DELETE,
-            // Method::CONNECT, // Excluded as it's unimplemented
-        ],
-        url_path: "/",
-        handler: None,
-        settings: None,
-    };
-    route
-}
-
-fn mock_request(method: Method, path: &str, body: Option<&str>) -> Request<Bytes> {
-    Request::builder()
-        .method(method)
-        .uri(format!("http://localhost:8080{path}"))
-        .body(Bytes::from(body.unwrap_or_default()))
-        .unwrap()
-}
-
-fn mock_server_config() -> ServerConfig<'static> {
-    let config = ServerConfig {
-        host: "127.0.0.1",
-        ports: vec![8080],
-        default_error_path: None,
-        body_size_limit: 10024,
-        routes: vec![
-            Route {
-                url_path: "/test.txt",
-                methods: vec![
-                    Method::GET,
-                    Method::POST,
-                    Method::HEAD,
-                    Method::OPTIONS,
-                    Method::TRACE,
-                    Method::PUT,
-                    Method::PATCH,
-                    Method::DELETE,
-                ],
-                handler: None,
-                settings: Some(Settings {
-                    http_redirections: None,
-                    redirect_status_code: None,
-                    root_path: Some("/files"),
-                    default_if_url_is_dir: None,
-                    default_if_request_is_dir: None,
-                    cgi_def: None,
-                    list_directory: false,
-                }),
-            },
-            Route {
-                url_path: "/test_put.txt",
-                methods: vec![
-                    Method::GET,
-                    Method::POST,
-                    Method::HEAD,
-                    Method::OPTIONS,
-                    Method::TRACE,
-                    Method::PUT,
-                    Method::PATCH,
-                    Method::DELETE,
-                ],
-                handler: None,
-                settings: Some(Settings {
-                    http_redirections: None,
-                    redirect_status_code: None,
-                    root_path: Some("/files"),
-                    default_if_url_is_dir: None,
-                    default_if_request_is_dir: None,
-                    cgi_def: None,
-                    list_directory: false,
-                }),
-            },
-            Route {
-                url_path: "/patch_test.txt",
-                methods: vec![
-                    Method::GET,
-                    Method::POST,
-                    Method::HEAD,
-                    Method::OPTIONS,
-                    Method::TRACE,
-                    Method::PUT,
-                    Method::PATCH,
-                    Method::DELETE,
-                ],
-                handler: None,
-                settings: Some(Settings {
-                    http_redirections: None,
-                    redirect_status_code: None,
-                    root_path: Some("/files"),
-                    default_if_url_is_dir: None,
-                    default_if_request_is_dir: None,
-                    cgi_def: None,
-                    list_directory: false,
-                }),
-            },
-            Route {
-                url_path: "/delete_test.txt",
-                methods: vec![
-                    Method::GET,
-                    Method::POST,
-                    Method::HEAD,
-                    Method::OPTIONS,
-                    Method::TRACE,
-                    Method::PUT,
-                    Method::PATCH,
-                    Method::DELETE,
-                ],
-                handler: None,
-                settings: Some(Settings {
-                    http_redirections: None,
-                    redirect_status_code: None,
-                    root_path: Some("/files"),
-                    default_if_url_is_dir: None,
-                    default_if_request_is_dir: None,
-                    cgi_def: None,
-                    list_directory: false,
-                }),
-            },
-            Route {
-                url_path: "/non_existing_file.txt",
-                methods: vec![
-                    Method::GET,
-                    Method::POST,
-                    Method::HEAD,
-                    Method::OPTIONS,
-                    Method::TRACE,
-                    Method::PUT,
-                    Method::PATCH,
-                    Method::DELETE,
-                ],
-                handler: None,
-                settings: Some(Settings {
-                    http_redirections: None,
-                    redirect_status_code: None,
-                    root_path: Some("/files"),
-                    default_if_url_is_dir: None,
-                    default_if_request_is_dir: None,
-                    cgi_def: None,
-                    list_directory: false,
-                }),
-            },
-        ],
-    };
-    config
 }

@@ -10,7 +10,7 @@ use serve::*;
 use std::path::Path;
 
 const KB: usize = 1024;
-const BUFFER_SIZE: usize = KB;
+pub const BUFFER_SIZE: usize = KB;
 pub fn handle_connection(stream: &mut TcpStream, config: &ServerConfig) -> io::Result<()> {
     let request_parts = match unsafe { parse_http_request(stream) } {
         Ok(parts) => parts,

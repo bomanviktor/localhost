@@ -1,4 +1,5 @@
 use config::route::Settings;
+use http::StatusCode;
 use std::collections::HashMap;
 
 use crate::server::{update_cookie, validate_cookie, Cgi};
@@ -46,8 +47,8 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 methods: vec![http::Method::GET, http::Method::POST],
                 handler: None,
                 settings: Some(Settings {
-                    http_redirections: None,
-                    redirect_status_code: None,
+                    http_redirections: Some(vec!["/redirection-test"]),
+                    redirect_status_code: Some(StatusCode::from_u16(301).unwrap()),
                     root_path: Some("/files"),
                     default_if_url_is_dir: None,
                     default_if_request_is_dir: None,
@@ -56,7 +57,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 }),
             },
             Route {
-                url_path: "/mega-dir", // this does allow ./files/* to be accessed
+                url_path: "/mega-dir",
                 methods: vec![http::Method::GET],
                 handler: None,
                 settings: Some(Settings {
@@ -83,7 +84,7 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                     http_redirections: None,
                     redirect_status_code: None,
                     root_path: None,
-                    default_if_url_is_dir: Some("/dir.html"),
+                    default_if_url_is_dir: None,
                     default_if_request_is_dir: None,
                     cgi_def: None,
                     list_directory: true,

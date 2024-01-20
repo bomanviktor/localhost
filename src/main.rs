@@ -5,3 +5,8 @@ fn main() {
     init_logs();
     start(servers());
 }
+
+#[test]
+fn test_main() {
+    std::thread::spawn(|| main());
+}

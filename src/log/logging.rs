@@ -56,13 +56,17 @@ pub fn log_with_file_line(
     write!(message, "[{}:{}] ", file_source, line_number).unwrap();
     writeln!(message, "{}", log_message).unwrap();
 
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(log_file)
-        .expect("Unable to open file");
+    let mut file = match OpenOptions::new().create(true).append(true).open(log_file) {
+        Ok(f) => f,
+        _ => return,
+    };
     file.write_all(message.as_bytes())
         .expect("Unable to write to file");
+}
+
+#[test]
+fn test_log_with_file_line() {
+    log_with_file_line(LogFileType::Client, "".to_string(), "", 10);
 }
 
 // Macro to simplify logging

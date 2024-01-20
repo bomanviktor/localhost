@@ -34,7 +34,6 @@ pub fn send_request(
     let response = request_builder.send().unwrap();
     response
 }
-
 pub fn buffer_and_client(path: &str) -> (Vec<u8>, Client) {
     let mut file = File::open(path).unwrap();
     let mut buf = Vec::new();

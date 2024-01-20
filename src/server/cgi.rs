@@ -10,6 +10,7 @@ use std::process::Command;
 
 #[derive(Clone, Debug)]
 pub enum Cgi {
+    /*
     Ada,
     C,
     CSharp,
@@ -21,7 +22,9 @@ pub enum Cgi {
     Groovy,
     Haskell,
     Java,
+     */
     JavaScript,
+    /*
     Julia,
     Kotlin,
     Lua,
@@ -30,16 +33,20 @@ pub enum Cgi {
     OCaml,
     Pascal,
     Perl,
+
+     */
     PHP,
     Python,
-    R,
+    // R,
     Ruby,
+    /*
     Rust,
     Scala,
     Shell,
     Swift,
     TypeScript,
     Zig,
+     */
 }
 
 pub fn is_cgi_request(path: &str) -> bool {
@@ -94,6 +101,7 @@ pub fn execute_cgi_script(
         .get(file_extension.as_str())
     {
         Some(cgi_type) => match cgi_type {
+            /*
             Cgi::Ada => ("ada", vec![path, body]),
             Cgi::C => ("./compiled/c_binary", vec![body]), // Replace with actual compiled binary path
             Cgi::CSharp => ("dotnet", vec![path, body]), // Replace with actual compiled binary path
@@ -112,7 +120,10 @@ pub fn execute_cgi_script(
                     "Main".to_string(),
                 ],
             ), // Replace with actual compiled class path and main class
+
+             */
             Cgi::JavaScript => ("node", vec![path, body]),
+            /*
             Cgi::Julia => ("julia", vec![path, body]),
             Cgi::Kotlin => (
                 "kotlin",
@@ -132,10 +143,12 @@ pub fn execute_cgi_script(
             Cgi::OCaml => ("ocaml", vec![path, body]),
             Cgi::Pascal => ("fpc", vec![path, body]),
             Cgi::Perl => ("perl", vec![path, body]),
+             */
             Cgi::PHP => ("php", vec![path, body]),
             Cgi::Python => ("python3", vec![path, body]),
-            Cgi::R => ("Rscript", vec![path, body]),
+            //Cgi::R => ("Rscript", vec![path, body]),
             Cgi::Ruby => ("ruby", vec![path, body]),
+            /*
             Cgi::Rust => (
                 "cargo",
                 vec![
@@ -151,7 +164,9 @@ pub fn execute_cgi_script(
             Cgi::Swift => ("swift", vec![path, body]),
             Cgi::TypeScript => ("ts-node", vec![path, body]),
             Cgi::Zig => ("zig", vec!["run".to_string(), path, body]),
+             */
         },
+
         None => {
             log!(
                 LogFileType::Server,
