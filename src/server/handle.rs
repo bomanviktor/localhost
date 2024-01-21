@@ -12,25 +12,11 @@ use std::path::Path;
 const KB: usize = 1024;
 pub const BUFFER_SIZE: usize = KB;
 pub fn handle_connection(stream: &mut TcpStream, config: &ServerConfig) -> io::Result<()> {
-    let request_parts = match unsafe { parse_http_request(stream) } {
-        Ok(parts) => parts,
-        Err(e) => {
-            log!(
-                LogFileType::Server,
-                format!("Could not read bytes on line {e} ")
-            );
-            return serve_response(stream, error(StatusCode::BAD_REQUEST, config));
-        }
-    };
-
-    // Get the http::Request<String> type from the request string
-    let request = match get_request(config, request_parts.clone()) {
-        Ok(req) => req,
-        Err(e) => {
-            log!(LogFileType::Server, format!("Error: {}", e));
-            return serve_response(stream, error(e, config));
-        }
-    };
+    let request_parts =
+        unsafe { parse_http_request(stream) }.map_err(|_| io::Error::from_raw_os_error(35))?;
+    let request = get_request(config, request_parts.clone())
+        .map_err(|e| serve_response(stream, error(e, config)))
+        .unwrap_or_else(|_| Default::default());
 
     // Get the route from the http::Request
     let route = match get_route(&request, config) {
@@ -138,20 +124,22 @@ unsafe fn parse_http_request(stream: &mut TcpStream) -> Result<(String, Vec<u8>)
                 }
             }
             Err(_) => {
+                let rest;
                 unsafe {
-                    let rest = String::from_utf8_unchecked(buffer.to_vec());
-                    let index = rest.find("\r\n\r\n").unwrap_or(0);
-                    head.push_str(rest.split_at(index).0);
+                    rest = String::from_utf8_unchecked(buffer.to_vec());
+                }
+                let index = rest.find("\r\n\r\n").unwrap_or(0);
+                head.push_str(rest.split_at(index).0);
+                if index == 0 {
+                    body.extend(&buffer[index..bytes_read]);
+                } else {
                     body.extend(&buffer[index + 4..bytes_read]);
                 }
                 break;
             }
         }
         // Clear the buffer
-        buffer = [0; BUFFER_SIZE];
     }
-
-    buffer = [0; BUFFER_SIZE];
 
     loop {
         let bytes_read = match stream.read(&mut buffer) {
@@ -162,8 +150,6 @@ unsafe fn parse_http_request(stream: &mut TcpStream) -> Result<(String, Vec<u8>)
         if bytes_read < BUFFER_SIZE {
             break;
         }
-
-        buffer = [0; BUFFER_SIZE];
     }
 
     Ok((head, body))

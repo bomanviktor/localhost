@@ -71,6 +71,20 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 }),
             },
             Route {
+                url_path: "/src",
+                methods: vec![http::Method::GET],
+                handler: None,
+                settings: Some(Settings {
+                    http_redirections: None,
+                    redirect_status_code: None,
+                    root_path: None,
+                    default_if_url_is_dir: Some("/does-not-exist-mate"),
+                    default_if_request_is_dir: None,
+                    cgi_def: None,
+                    list_directory: false,
+                }),
+            },
+            Route {
                 url_path: "/files",
                 methods: vec![
                     http::Method::GET,

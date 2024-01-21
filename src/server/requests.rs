@@ -1,5 +1,3 @@
-use crate::log;
-use crate::log::*;
 use crate::server::{Request, Route, ServerConfig, StatusCode};
 use crate::type_aliases::Bytes;
 
@@ -32,16 +30,9 @@ pub fn get_request(
         body::get_body(body, conf.body_size_limit)?
     };
 
-    match request_builder.body(body) {
-        Ok(request) => Ok(request),
-        Err(request) => {
-            log!(
-                LogFileType::Server,
-                format!("Error: Failed to get body {}", request)
-            );
-            Err(StatusCode::BAD_REQUEST)
-        }
-    }
+    request_builder
+        .body(body)
+        .map_err(|_| StatusCode::BAD_REQUEST)
 }
 
 pub mod path {
@@ -107,6 +98,24 @@ pub mod path {
             format!(".{path}")
         }
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn test_add_root_to_path() {
+            let path = "/foo";
+            let route = Route {
+                url_path: path,
+                methods: vec![],
+                handler: None,
+                settings: None,
+            };
+            let expected_path = "./foo".to_string();
+            assert_eq!(add_root_to_path(&route, path), expected_path);
+        }
+    }
 }
 
 pub mod version {
@@ -136,14 +145,18 @@ pub mod version {
         }
     }
 
-    #[test]
-    fn test_get_version() {
-        for version in ["HTTP/0.9", "HTTP/1.0", "HTTP/1.1", "HTTP/2.0", "HTTP/3.0"] {
-            assert!(get_version(version).is_ok());
-        }
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        #[test]
+        fn test_get_version() {
+            for version in ["HTTP/0.9", "HTTP/1.0", "HTTP/1.1", "HTTP/2.0", "HTTP/3.0"] {
+                assert!(get_version(version).is_ok());
+            }
 
-        assert!(get_version("HTTP/BILL_CLINTON")
-            .is_err_and(|code| code == StatusCode::HTTP_VERSION_NOT_SUPPORTED));
+            assert!(get_version("HTTP/BILL_CLINTON")
+                .is_err_and(|code| code == StatusCode::HTTP_VERSION_NOT_SUPPORTED));
+        }
     }
 }
 
@@ -190,11 +203,17 @@ pub mod headers {
             None
         }
     }
+    #[cfg(test)]
+    mod tests {
+        use super::*;
 
-    #[test]
-    fn test_format_header() {
-        assert!(format_header("Foo: bar").is_some_and(|(foo, bar)| foo == "Foo" && bar == "bar"));
-        assert!(format_header("Foo: bar: baz").is_none());
+        #[test]
+        fn test_format_header() {
+            assert!(
+                format_header("Foo: bar").is_some_and(|(foo, bar)| foo == "Foo" && bar == "bar")
+            );
+            assert!(format_header("Foo: bar: baz").is_none());
+        }
     }
 }
 
@@ -210,16 +229,6 @@ pub mod body {
         } else {
             Err(StatusCode::PAYLOAD_TOO_LARGE)
         }
-    }
-
-    #[test]
-    fn test_get_body() {
-        let body = Bytes::from("hej");
-        assert!(
-            get_body(body.clone(), 10).is_ok_and(|b| b == body),
-            "Return should be: {body:?}"
-        );
-        assert!(get_body(body, 1).is_err_and(|code| code == StatusCode::PAYLOAD_TOO_LARGE));
     }
 
     pub(crate) fn get_chunked_body(body: Bytes, limit: usize) -> Result<Bytes, StatusCode> {
@@ -280,38 +289,12 @@ pub mod body {
         Ok(result_body)
     }
 
-    #[test]
-    fn test_get_chunked_body() {
-        // Test case 1: Valid chunked body
-        let input_body_1 = Bytes::from("4\r\nTest\r\n5\r\n12345\r\n0\r\n\r\n");
-        let limit_1 = 100;
-        let expected_result_1 = Bytes::from("Test12345");
-        assert_eq!(
-            get_chunked_body(input_body_1, limit_1),
-            Ok(expected_result_1)
-        );
-
-        // Test case 2: Body too long, exceeds limit
-        let input_body_2 = Bytes::from("4\r\nTest\r\n5\r\n12345\r\n0\r\n\r\n");
-        let limit_2 = 5; // Set a limit that should be exceeded
-        assert_eq!(
-            get_chunked_body(input_body_2, limit_2),
-            Err(StatusCode::PAYLOAD_TOO_LARGE)
-        );
-
-        // Test case 3: Invalid chunk size format
-        let input_body_3 = Bytes::from("invalid_size\r\n");
-        let limit_3 = 100;
-        assert_eq!(
-            get_chunked_body(input_body_3, limit_3),
-            Err(StatusCode::BAD_REQUEST)
-        );
-
-        // Add more test cases as needed to cover various scenarios
-    }
-
     // Function to split the byte slice at the first occurrence of delimiter1 and delimiter2
-    fn split_once_str(data: &[u8], delimiter1: u8, delimiter2: u8) -> Option<(&[u8], &[u8])> {
+    pub(crate) fn split_once_str(
+        data: &[u8],
+        delimiter1: u8,
+        delimiter2: u8,
+    ) -> Option<(&[u8], &[u8])> {
         for (i, &byte) in data.iter().enumerate() {
             if byte == delimiter1 && data[i + 1] == delimiter2 {
                 let chunk = &data[0..i];
@@ -322,9 +305,67 @@ pub mod body {
         None
     }
 
-    #[test]
-    fn test_split_once_str() {
-        assert!(split_once_str("hej".as_bytes(), b'x', b'y').is_none());
+    #[cfg(test)]
+    mod test {
+        use super::*;
+
+        #[test]
+        fn test_get_chunked_body() {
+            // Test case 1: Valid chunked body
+            let input_body_1 = Bytes::from("4\r\nTest\r\n5\r\n12345\r\n0\r\n\r\n");
+            let limit_1 = 100;
+            let expected_result_1 = Bytes::from("Test12345");
+            assert_eq!(
+                get_chunked_body(input_body_1, limit_1),
+                Ok(expected_result_1)
+            );
+
+            // Test case 2: Body too long, exceeds limit
+            let input_body_2 = Bytes::from("4\r\nTest\r\n5\r\n12345\r\n0\r\n\r\n");
+            let limit_2 = 5; // Set a limit that should be exceeded
+            assert_eq!(
+                get_chunked_body(input_body_2, limit_2),
+                Err(StatusCode::PAYLOAD_TOO_LARGE)
+            );
+
+            // Test case 3: Invalid chunk size format
+            let input_body_3 = Bytes::from("invalid_size\r\n");
+            let limit_3 = 100;
+            assert_eq!(
+                get_chunked_body(input_body_3, limit_3),
+                Err(StatusCode::BAD_REQUEST)
+            );
+
+            // Test case 4: No CRLF after chunk size
+            let input_body_4 = Bytes::from("3\r\nfoo\r\n12");
+            let limit_4 = 100;
+            assert_eq!(
+                get_chunked_body(input_body_4, limit_4),
+                Err(StatusCode::BAD_REQUEST)
+            );
+
+            // Test case 5: Not enough data for next chunk
+            let input_body_5 = Bytes::from("10\r\nfoo\r\n12");
+            let limit_5 = 100;
+            assert_eq!(
+                get_chunked_body(input_body_5, limit_5),
+                Err(StatusCode::BAD_REQUEST)
+            );
+        }
+
+        #[test]
+        fn test_get_body() {
+            let body = Bytes::from("hej");
+            assert!(
+                get_body(body.clone(), 10).is_ok_and(|b| b == body),
+                "Return should be: {body:?}"
+            );
+            assert!(get_body(body, 1).is_err_and(|code| code == StatusCode::PAYLOAD_TOO_LARGE));
+        }
+        #[test]
+        fn test_split_once_str() {
+            assert!(split_once_str("hej".as_bytes(), b'x', b'y').is_none());
+        }
     }
 }
 
@@ -341,7 +382,7 @@ pub mod utils {
         }
     }
 
-    /// `get_line` gets the `&str` at `index` after performing `split('\n')`
+    /// `get_line` gets the `&str` at `index` after performing `split("\r\n")`
     pub fn get_line(str: &str, index: usize) -> &str {
         let lines = str
             .trim_end_matches('\0')
@@ -349,10 +390,24 @@ pub mod utils {
             .collect::<Vec<&str>>();
         if lines.is_empty() {
             ""
-        } else if index > lines.len() {
-            lines[0]
-        } else {
+        } else if index < lines.len() {
             lines[index]
+        } else {
+            lines[0]
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        #[test]
+        fn test_get_split_index() {
+            assert!(get_split_index("", 100).is_empty());
+        }
+        #[test]
+        fn test_get_line() {
+            assert!(get_line("", 1).is_empty());
+            assert_eq!(get_line("hello", 100), "hello");
         }
     }
 }
