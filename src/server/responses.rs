@@ -1,46 +1,44 @@
-use crate::server::{Bytes, Response, ServerConfig, StatusCode};
+use crate::server::{Bytes, Response, ServerConfig, StatusCode, BUFFER_SIZE};
 use http::header::TRANSFER_ENCODING;
 use http::Version;
 use std::fs;
-use std::str::from_utf8_unchecked;
 
-/// # Safety
-///
-/// This function will call the unsafe method `from_utf8_unchecked`
-pub unsafe fn format_response(response: Response<Bytes>) -> Bytes {
+pub fn format_response(response: Response<Bytes>) -> Bytes {
     // Split up the response into head and parts
     let (head, body) = response.into_parts();
-    let mut resp = format!("{:?} {}\r\n", head.version, head.status);
+    let mut resp = Bytes::from(format!("{:?} {}\r\n", head.version, head.status));
 
     // Get all headers into the response
     for (key, value) in head.headers.iter() {
         let key = key.to_string();
         let value = value.to_str().unwrap_or_default();
-        let header = format!("{key}: {value}\r\n");
-        resp.push_str(&header);
+        let header = Bytes::from(format!("{key}: {value}\r\n"));
+        resp.extend(header);
     }
 
-    resp.push_str("\r\n");
+    resp.extend("\r\n".as_bytes()); // Add the extra CRLF before the response body
+
     if body.is_empty() {
-        return Bytes::from(resp);
+        return resp;
     }
 
-    // Make this dynamic
-    let chunk_size = body.len() / 10;
-
-    unsafe {
-        if is_chunked(head) {
-            for chunk in body.chunks(chunk_size) {
-                let size = chunk.len();
-                resp.push_str(&format!("{:X}\r\n{}\r\n", size, from_utf8_unchecked(chunk)));
-            }
-            resp.push_str("0\r\n\r\n"); // End of chunks
-        } else {
-            resp.push_str(from_utf8_unchecked(&body)); // No chunks
+    let chunk_size = if body.len() < BUFFER_SIZE {
+        body.len()
+    } else {
+        BUFFER_SIZE
+    };
+    if is_chunked(head) {
+        for chunk in body.chunks(chunk_size) {
+            resp.extend(format!("{:X}\r\n", chunk.len()).as_bytes());
+            resp.extend(chunk);
+            resp.extend("\r\n".as_bytes());
         }
+        resp.extend("0\r\n\r\n".as_bytes()); // End of chunks
+    } else {
+        resp.extend(body); // No chunks
     }
 
-    Bytes::from(resp)
+    resp
 }
 fn is_chunked(head: http::response::Parts) -> bool {
     head.headers
@@ -93,13 +91,12 @@ pub fn content_type(path: &str) -> String {
     }
     .to_string()
 }
-
 pub mod informational {
     use super::*;
     use http::header::HOST;
 
     #[allow(dead_code)]
-    fn informational(
+    pub fn informational(
         status: StatusCode,
         config: &ServerConfig,
         version: Version,

@@ -28,7 +28,7 @@ pub mod server_config {
         use std::collections::HashMap;
 
         pub type HandlerFunc =
-            fn(req: &Request<String>, conf: &ServerConfig) -> Result<Response<Bytes>, StatusCode>;
+            fn(req: &Request<Bytes>, conf: &ServerConfig) -> Result<Response<Bytes>, StatusCode>;
 
         #[derive(Clone, Debug)]
         pub struct Route<'a> {

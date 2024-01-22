@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use crate::log;
 use crate::log::*;
 use crate::server::errors::error;
@@ -9,40 +7,27 @@ use crate::server::redirections::redirect;
 use crate::server::safe::get;
 use crate::server::*;
 use serve::*;
+use std::path::Path;
 
+const KB: usize = 1024;
+pub const BUFFER_SIZE: usize = KB;
 pub fn handle_connection(stream: &mut TcpStream, config: &ServerConfig) -> io::Result<()> {
-    let mut buffer = [0; 1024];
+    let request_parts =
+        unsafe { parse_http_request(stream) }.map_err(|_| io::Error::from_raw_os_error(35))?;
+    let request = get_request(config, request_parts.clone())
+        .map_err(|e| serve_response(stream, error(e, config)))
+        .unwrap_or_else(|_| Default::default());
 
-    // Read from stream
-    let bytes_read = stream.read(&mut buffer)?;
-
-    // Parse the request
-    let request_string = match String::from_utf8(buffer[..bytes_read].to_vec()) {
-        Ok(request_str) => request_str,
-        Err(e) => {
-            log!(
-                LogFileType::Server,
-                format!("Error reading from buffer to string: {e}")
-            );
-            return Ok(());
-        }
-    };
-
-    // Match the request with a route
-    let request = match get_request(config, &request_string) {
-        Ok(req) => req,
-        Err(e) => {
-            log!(LogFileType::Server, format!("Error: {}", e));
-            return serve_response(stream, error(e, config));
-        }
-    };
-
-    // Handle redirections
+    // Get the route from the http::Request
     let route = match get_route(&request, config) {
         Ok(route) => route,
+
+        // Handle the redirections
         Err((code, path)) if code.is_redirection() => {
             return serve_response(stream, redirect(code, config, request.version(), path));
         }
+
+        // Handle the errors
         Err((code, _)) => {
             log!(LogFileType::Server, format!("Error: {}", &code));
             return serve_response(stream, error(code, config));
@@ -69,10 +54,10 @@ pub fn handle_connection(stream: &mut TcpStream, config: &ServerConfig) -> io::R
         // Serve the default file if enabled in config
         if let Some(default_file) = settings.default_if_url_is_dir {
             let default_path = &add_root_to_path(&route, default_file);
-            let request_string =
-                replace_path_in_request(&request_string, request.uri().path(), default_path);
-
-            let request = match get_request(config, &request_string) {
+            let new_head =
+                replace_path_in_request(request_parts.0, request.uri().path(), default_path);
+            let request_parts = (new_head, request_parts.1);
+            let request = match get_request(config, request_parts) {
                 Ok(r) => r,
                 Err(code) => {
                     log!(LogFileType::Server, code.to_string());
@@ -104,7 +89,6 @@ pub fn handle_connection(stream: &mut TcpStream, config: &ServerConfig) -> io::R
         };
     }
 
-    // Handle based on HTTP method
     match handle_method(&route, &request, config) {
         Ok(response) => serve_response(stream, response),
         Err(code) => {
@@ -114,11 +98,68 @@ pub fn handle_connection(stream: &mut TcpStream, config: &ServerConfig) -> io::R
     }
 }
 
-fn replace_path_in_request(req_string: &str, path: &str, default_path: &str) -> String {
+unsafe fn parse_http_request(stream: &mut TcpStream) -> Result<(String, Vec<u8>), u32> {
+    let mut buffer = [0; BUFFER_SIZE];
+    let mut head = String::new();
+    let mut body = Vec::new();
+
+    // Get the head and first bytes of the body
+    loop {
+        let bytes_read = stream.read(&mut buffer).map_err(|_| line!())?;
+
+        if bytes_read == 0 {
+            return Ok((head, body));
+        }
+
+        match String::from_utf8(buffer[..bytes_read].to_vec()) {
+            Ok(chunk) => {
+                if let Some(index) = chunk.find("\r\n\r\n") {
+                    // Split head and body when finding the double CRLF (Carriage Return Line Feed)
+                    head.push_str(&chunk[..index]);
+                    body.extend(&buffer[index + 4..bytes_read]);
+                    break;
+                } else {
+                    // If no double CRLF found, add the entire chunk to the head
+                    head.push_str(&chunk);
+                }
+            }
+            Err(_) => {
+                let rest;
+                unsafe {
+                    rest = String::from_utf8_unchecked(buffer.to_vec());
+                }
+                let index = rest.find("\r\n\r\n").unwrap_or(0);
+                head.push_str(rest.split_at(index).0);
+                if index == 0 {
+                    body.extend(&buffer[index..bytes_read]);
+                } else {
+                    body.extend(&buffer[index + 4..bytes_read]);
+                }
+                break;
+            }
+        }
+        // Clear the buffer
+    }
+
+    loop {
+        let bytes_read = match stream.read(&mut buffer) {
+            Ok(b) => b,
+            Err(_) => return Ok((head, body)),
+        };
+        body.extend(buffer);
+        if bytes_read < BUFFER_SIZE {
+            break;
+        }
+    }
+
+    Ok((head, body))
+}
+
+fn replace_path_in_request(head: String, path: &str, default_path: &str) -> String {
     return if let Some(stripped_path) = path.strip_prefix('.') {
-        req_string.replacen(stripped_path, &default_path[1..], 1)
+        head.replacen(stripped_path, &default_path[1..], 1)
     } else {
-        req_string.replacen(path, &default_path[1..], 1)
+        head.replacen(path, &default_path[1..], 1)
     };
 }
 
@@ -133,7 +174,7 @@ mod serve {
     use std::{fs, io};
 
     pub fn serve_response(stream: &mut TcpStream, response: Response<Bytes>) -> io::Result<()> {
-        let formatted_response = unsafe { format_response(response.clone()) };
+        let formatted_response = format_response(response.clone());
         let total_size = formatted_response.len();
         let mut written_size = 0;
 

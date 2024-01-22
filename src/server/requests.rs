@@ -1,11 +1,15 @@
-use crate::log;
-use crate::log::*;
 use crate::server::{Request, Route, ServerConfig, StatusCode};
+use crate::type_aliases::Bytes;
 
-pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>, StatusCode> {
-    let version = version::get_version(req_str)?;
-    let path = path::get_path(req_str);
-    let method = super::get_method(req_str)?;
+pub fn get_request(
+    conf: &ServerConfig,
+    request_parts: (String, Bytes),
+) -> Result<Request<Bytes>, StatusCode> {
+    let head = &request_parts.0;
+    let body = request_parts.1;
+    let version = version::get_version(head)?;
+    let path = path::get_path(head);
+    let method = super::get_method(head)?;
 
     // Constructing the request with parsed headers and body
     let mut request_builder = http::Request::builder()
@@ -13,98 +17,22 @@ pub fn get_request(conf: &ServerConfig, req_str: &str) -> Result<Request<String>
         .uri(path)
         .version(version);
 
-    for header in headers::get_headers(req_str) {
+    for header in headers::get_headers(head) {
         if let Some((key, value)) = headers::format_header(header) {
             request_builder =
                 request_builder.header(key.to_ascii_lowercase(), value.to_ascii_lowercase());
         }
     }
 
-    // Decapitate the request
-    let body_start_index = req_str.find("\r\n\r\n").unwrap_or(req_str.len());
-
-    let body_str = if req_str.contains("\r\n\r\n") {
-        &req_str[body_start_index + 4..] // "+ 4" to skip past "\r\n\r\n"
-    } else {
-        req_str
-    };
-
     let body = if headers::is_chunked(request_builder.headers_ref()) {
-        get_chunked_body(body_str, conf.body_size_limit)?
+        body::get_chunked_body(body, conf.body_size_limit)?
     } else {
-        body::get_body(req_str, conf.body_size_limit)?
+        body::get_body(body, conf.body_size_limit)?
     };
 
-    match request_builder.body(body) {
-        Ok(request) => Ok(request),
-        Err(request) => {
-            log!(
-                LogFileType::Server,
-                format!("Error: Failed to get body {}", request)
-            );
-            Err(StatusCode::BAD_REQUEST)
-        }
-    }
-}
-
-fn get_chunked_body(body_str: &str, limit: usize) -> Result<String, StatusCode> {
-    let mut body = String::new();
-    let mut remaining_str = body_str;
-
-    while !remaining_str.is_empty() {
-        // Split at the first occurrence of CRLF
-        if let Some((size_str, rest)) = remaining_str.split_once("\r\n") {
-            // Parse the chunk size
-            let chunk_size = match usize::from_str_radix(size_str.trim(), 16) {
-                Ok(size) => size,
-                Err(size) => {
-                    log!(
-                        LogFileType::Server,
-                        format!("Error: Failed to get chunk size {}", size)
-                    );
-                    return Err(StatusCode::BAD_REQUEST);
-                }
-            };
-
-            // Check for the end of the chunked body
-            if chunk_size == 0 {
-                break;
-            }
-
-            // Ensure there's enough data for the chunk
-            if rest.len() < chunk_size {
-                log!(
-                    LogFileType::Server,
-                    format!("Error: Not enough data for chunk {}", rest.len())
-                );
-                return Err(StatusCode::BAD_REQUEST);
-            }
-
-            // Extract the chunk data
-            let (chunk_data, after_chunk) = rest.split_at(chunk_size);
-            body.push_str(chunk_data);
-
-            // Check body size limit
-            if body.len() > limit {
-                log!(
-                    LogFileType::Server,
-                    format!("Error: body too long {}", body.len())
-                );
-                return Err(StatusCode::PAYLOAD_TOO_LARGE);
-            }
-
-            // Prepare for the next iteration, skip past the chunk data and CRLF
-            remaining_str = &after_chunk[2..]; // Assumes CRLF is always present
-        } else {
-            log!(
-                LogFileType::Server,
-                "Error: Missing CRLF after chunk size".to_string()
-            );
-            return Err(StatusCode::BAD_REQUEST); // Missing CRLF after chunk size
-        }
-    }
-
-    Ok(body)
+    request_builder
+        .body(body)
+        .map_err(|_| StatusCode::BAD_REQUEST)
 }
 
 pub mod path {
@@ -170,6 +98,24 @@ pub mod path {
             format!(".{path}")
         }
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn test_add_root_to_path() {
+            let path = "/foo";
+            let route = Route {
+                url_path: path,
+                methods: vec![],
+                handler: None,
+                settings: None,
+            };
+            let expected_path = "./foo".to_string();
+            assert_eq!(add_root_to_path(&route, path), expected_path);
+        }
+    }
 }
 
 pub mod version {
@@ -196,6 +142,20 @@ pub mod version {
                 );
                 Err(StatusCode::HTTP_VERSION_NOT_SUPPORTED)
             }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        #[test]
+        fn test_get_version() {
+            for version in ["HTTP/0.9", "HTTP/1.0", "HTTP/1.1", "HTTP/2.0", "HTTP/3.0"] {
+                assert!(get_version(version).is_ok());
+            }
+
+            assert!(get_version("HTTP/BILL_CLINTON")
+                .is_err_and(|code| code == StatusCode::HTTP_VERSION_NOT_SUPPORTED));
         }
     }
 }
@@ -243,23 +203,168 @@ pub mod headers {
             None
         }
     }
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn test_format_header() {
+            assert!(
+                format_header("Foo: bar").is_some_and(|(foo, bar)| foo == "Foo" && bar == "bar")
+            );
+            assert!(format_header("Foo: bar: baz").is_none());
+        }
+    }
 }
 
 pub mod body {
+    use crate::log;
+    use crate::log::LogFileType;
+    use crate::type_aliases::Bytes;
     use http::StatusCode;
 
-    pub fn get_body(req: &str, limit: usize) -> Result<String, StatusCode> {
-        let body = req
-            .trim_end_matches('\0')
-            .split("\r\n\r\n")
-            .skip(1)
-            .collect::<Vec<&str>>()
-            .join("\r\n\r\n");
-
+    pub fn get_body(body: Bytes, limit: usize) -> Result<Bytes, StatusCode> {
         if body.len() <= limit {
             Ok(body)
         } else {
             Err(StatusCode::PAYLOAD_TOO_LARGE)
+        }
+    }
+
+    pub(crate) fn get_chunked_body(body: Bytes, limit: usize) -> Result<Bytes, StatusCode> {
+        let mut result_body = Vec::new();
+        let mut remaining_data = &body[..];
+
+        while !remaining_data.is_empty() {
+            // Split at the first occurrence of CRLF
+            if let Some((size_str, rest)) = split_once_str(remaining_data, b'\r', b'\n') {
+                // Parse the chunk size
+                let chunk_size =
+                    match usize::from_str_radix(String::from_utf8_lossy(size_str).trim(), 16) {
+                        Ok(size) => size,
+                        Err(_) => {
+                            log!(
+                                LogFileType::Server,
+                                "Error: Failed to parse chunk size".to_string()
+                            );
+                            return Err(StatusCode::BAD_REQUEST);
+                        }
+                    };
+
+                // Check for the end of the chunked body
+                if chunk_size == 0 {
+                    break;
+                }
+
+                // Ensure there's enough data for the chunk
+                if rest.len() < chunk_size + 2 {
+                    log!(
+                        LogFileType::Server,
+                        "Error: Not enough data for chunk".to_string()
+                    );
+                    return Err(StatusCode::BAD_REQUEST);
+                }
+
+                // Extract the chunk data
+                let (chunk_data, after_chunk) = rest.split_at(chunk_size);
+                result_body.extend_from_slice(chunk_data);
+
+                // Check body size limit
+                if result_body.len() > limit {
+                    log!(LogFileType::Server, "Error: Body too long".to_string());
+                    return Err(StatusCode::PAYLOAD_TOO_LARGE);
+                }
+
+                // Prepare for the next iteration, skip past the chunk data and CRLF
+                remaining_data = &after_chunk[2..];
+            } else {
+                log!(
+                    LogFileType::Server,
+                    "Error: Missing CRLF after chunk size".to_string()
+                );
+                return Err(StatusCode::BAD_REQUEST); // Missing CRLF after chunk size
+            }
+        }
+
+        Ok(result_body)
+    }
+
+    // Function to split the byte slice at the first occurrence of delimiter1 and delimiter2
+    pub(crate) fn split_once_str(
+        data: &[u8],
+        delimiter1: u8,
+        delimiter2: u8,
+    ) -> Option<(&[u8], &[u8])> {
+        for (i, &byte) in data.iter().enumerate() {
+            if byte == delimiter1 && data[i + 1] == delimiter2 {
+                let chunk = &data[0..i];
+                let rest = data.split_at(i + 2).1;
+                return Some((chunk, rest));
+            }
+        }
+        None
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::*;
+
+        #[test]
+        fn test_get_chunked_body() {
+            // Test case 1: Valid chunked body
+            let input_body_1 = Bytes::from("4\r\nTest\r\n5\r\n12345\r\n0\r\n\r\n");
+            let limit_1 = 100;
+            let expected_result_1 = Bytes::from("Test12345");
+            assert_eq!(
+                get_chunked_body(input_body_1, limit_1),
+                Ok(expected_result_1)
+            );
+
+            // Test case 2: Body too long, exceeds limit
+            let input_body_2 = Bytes::from("4\r\nTest\r\n5\r\n12345\r\n0\r\n\r\n");
+            let limit_2 = 5; // Set a limit that should be exceeded
+            assert_eq!(
+                get_chunked_body(input_body_2, limit_2),
+                Err(StatusCode::PAYLOAD_TOO_LARGE)
+            );
+
+            // Test case 3: Invalid chunk size format
+            let input_body_3 = Bytes::from("invalid_size\r\n");
+            let limit_3 = 100;
+            assert_eq!(
+                get_chunked_body(input_body_3, limit_3),
+                Err(StatusCode::BAD_REQUEST)
+            );
+
+            // Test case 4: No CRLF after chunk size
+            let input_body_4 = Bytes::from("3\r\nfoo\r\n12");
+            let limit_4 = 100;
+            assert_eq!(
+                get_chunked_body(input_body_4, limit_4),
+                Err(StatusCode::BAD_REQUEST)
+            );
+
+            // Test case 5: Not enough data for next chunk
+            let input_body_5 = Bytes::from("10\r\nfoo\r\n12");
+            let limit_5 = 100;
+            assert_eq!(
+                get_chunked_body(input_body_5, limit_5),
+                Err(StatusCode::BAD_REQUEST)
+            );
+        }
+
+        #[test]
+        fn test_get_body() {
+            let body = Bytes::from("hej");
+            assert!(
+                get_body(body.clone(), 10).is_ok_and(|b| b == body),
+                "Return should be: {body:?}"
+            );
+            assert!(get_body(body, 1).is_err_and(|code| code == StatusCode::PAYLOAD_TOO_LARGE));
+        }
+        #[test]
+        fn test_split_once_str() {
+            assert!(split_once_str("hej".as_bytes(), b'x', b'y').is_none());
         }
     }
 }
@@ -277,7 +382,7 @@ pub mod utils {
         }
     }
 
-    /// `get_line` gets the `&str` at `index` after performing `split('\n')`
+    /// `get_line` gets the `&str` at `index` after performing `split("\r\n")`
     pub fn get_line(str: &str, index: usize) -> &str {
         let lines = str
             .trim_end_matches('\0')
@@ -285,10 +390,24 @@ pub mod utils {
             .collect::<Vec<&str>>();
         if lines.is_empty() {
             ""
-        } else if index > lines.len() {
-            lines[0]
-        } else {
+        } else if index < lines.len() {
             lines[index]
+        } else {
+            lines[0]
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        #[test]
+        fn test_get_split_index() {
+            assert!(get_split_index("", 100).is_empty());
+        }
+        #[test]
+        fn test_get_line() {
+            assert!(get_line("", 1).is_empty());
+            assert_eq!(get_line("hello", 100), "hello");
         }
     }
 }

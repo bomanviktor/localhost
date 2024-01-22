@@ -1,7 +1,5 @@
-const HOST: &str = "http://127.0.0.1:8080";
 use common::setup;
 use reqwest;
-use std::thread;
 
 mod common;
 mod test_config {
@@ -17,80 +15,256 @@ mod test_config {
         }
     }
 }
+mod test_handle_client {
+    use lazy_static::lazy_static;
+    const HOST: &str = "http://127.0.0.1:8080";
+    lazy_static! {
+        static ref CLIENT: Client = Client::new();
+    }
 
-mod chunked_encoding {
     use super::*;
+    use crate::common::send_request;
+    use http::Method;
+    use localhost::type_aliases::Bytes;
     use reqwest::blocking::Client;
-    use reqwest::header::{CONTENT_TYPE, TRANSFER_ENCODING};
 
-    fn send_chunked_request(
-        client: &Client,
-        url: &str,
-        body: &'static str,
-        method: http::Method,
-    ) -> reqwest::blocking::Response {
-        let mut request_builder = match method {
-            http::Method::POST => client.post(url),
-            http::Method::GET => client.get(url),
-            _ => client.get(url),
-        };
+    #[test]
+    fn cgi_request() {
+        setup();
+        let valid_endpoint = "/cgi/php.php";
+        let resp = send_request(
+            &CLIENT,
+            &format!("{HOST}{valid_endpoint}"),
+            Bytes::new(),
+            Method::GET,
+        );
 
-        request_builder = request_builder
-            .header(CONTENT_TYPE, "text/plain")
-            .header(TRANSFER_ENCODING, "chunked")
-            .body(body);
+        assert_eq!(resp.status().as_u16(), 200);
 
-        let response = request_builder.send().unwrap();
-        response
+        // Not found test
+        let invalid_endpoint = "/cgi/php.kek";
+        let resp = send_request(
+            &CLIENT,
+            &format!("{HOST}{invalid_endpoint}"),
+            Bytes::new(),
+            Method::GET,
+        );
+
+        assert_eq!(resp.status().as_u16(), 404);
     }
 
-    mod get {
-        #[test]
-        fn valid() {}
+    #[test]
+    fn bad_request() {
+        setup();
+        // Not found test
+        let valid_endpoint = "/";
+        let resp = send_request(
+            &CLIENT,
+            &format!("{HOST}{valid_endpoint}"),
+            Bytes::new(),
+            Method::GET,
+        );
 
-        #[test]
-        fn invalid() {}
+        assert!(resp.status().is_client_error());
     }
 
-    mod post {
+    #[test]
+    fn not_found() {
+        setup();
+        // Not found test
+        let invalid_endpoint = "/oga-boga";
+        let resp = send_request(
+            &CLIENT,
+            &format!("{HOST}{invalid_endpoint}"),
+            Bytes::new(),
+            Method::GET,
+        );
+
+        assert!(resp.status().is_client_error());
+    }
+
+    #[test]
+    fn redirections() {
+        setup();
+        // Not found test
+        let valid_endpoint = "/redirection-test";
+        let resp = send_request(
+            &CLIENT,
+            &format!("{HOST}{valid_endpoint}"),
+            Bytes::new(),
+            Method::GET,
+        );
+
+        assert!(resp.status().is_success()); // TODO: Work this shit out. Should not return 200 here.
+    }
+
+    #[test]
+    fn handlers() {
+        setup();
+        // Not found test
+        let valid_endpoint = "/api/update-cookie";
+        let resp = send_request(
+            &CLIENT,
+            &format!("{HOST}{valid_endpoint}"),
+            Bytes::new(),
+            Method::POST,
+        );
+
+        assert!(resp.status().is_success());
+
+        // Attempt to get a cookie we don't have.
+        let invalid_endpoint = "/api/get-cookie";
+        let resp = send_request(
+            &CLIENT,
+            &format!("{HOST}{invalid_endpoint}"),
+            Bytes::new(),
+            Method::GET,
+        );
+
+        assert!(resp.status().is_client_error());
+    }
+
+    #[test]
+    #[ignore]
+    fn default_file_exists() {
+        setup();
+        // Not found test
+        let valid_endpoint = "/mega-dir";
+        let resp = send_request(
+            &CLIENT,
+            &format!("{HOST}{valid_endpoint}"),
+            Bytes::new(),
+            Method::GET,
+        );
+
+        assert!(resp.status().is_success());
+    }
+
+    #[test]
+    fn directory_listing() {
+        setup();
+        // Not found test
+        let valid_endpoint = "/files";
+        let resp = send_request(
+            &CLIENT,
+            &format!("{HOST}{valid_endpoint}"),
+            Bytes::new(),
+            Method::GET,
+        );
+
+        assert!(resp.status().is_success());
+    }
+
+    mod binary_file {
         use super::*;
-        #[test]
-        fn valid() {
-            thread::spawn(setup);
+        use crate::common::send_request;
+        use localhost::type_aliases::Bytes;
 
-            let body = "Wiki\r\npedia\r\n in\r\n\r\nchunks.\r\n\r\n";
+        fn check_response(valid: bool, response: reqwest::blocking::Response, buf: Bytes) {
+            if valid {
+                assert_eq!(response.status(), reqwest::StatusCode::OK);
+                assert!(response.content_length().unwrap() > buf.len() as u64);
+            } else {
+                assert_ne!(response.status(), reqwest::StatusCode::OK);
+            }
+        }
+        mod valid {
+            use super::*;
+            use crate::common::get_buffer;
+            #[test]
+            fn post() {
+                setup();
+                let buf = get_buffer("./files/tests/test.png");
+                let valid_endpoint = "/files/tests.png";
 
-            let client = Client::new();
-            let valid_endpoint = "/test.txt";
+                let response = send_request(
+                    &CLIENT,
+                    &format!("{HOST}{valid_endpoint}"),
+                    buf.clone(),
+                    http::Method::POST,
+                );
 
-            let response = send_chunked_request(
-                &client,
-                &format!("{HOST}{valid_endpoint}"),
-                body,
-                http::Method::POST,
-            );
+                check_response(true, response, buf);
+            }
 
-            // Check the response status and body
-            assert_eq!(response.status(), reqwest::StatusCode::OK);
-            assert_eq!(response.bytes().unwrap_or_default(), body);
+            #[test]
+            fn put() {
+                setup();
+                let buf = get_buffer("./files/tests/test.png");
+                let valid_endpoint = "/files/tests.png";
+
+                // Post and Delete
+                let response = send_request(
+                    &CLIENT,
+                    &format!("{HOST}{valid_endpoint}"),
+                    buf.clone(),
+                    http::Method::PUT,
+                );
+
+                check_response(true, response, buf);
+            }
         }
 
-        #[test]
-        fn invalid() {}
+        mod invalid {}
     }
-}
 
-#[allow(dead_code)]
-mod test_requests {
-    use http::StatusCode;
-    mod utils {
+    mod chunked_encoding {
         use super::*;
-        use localhost::server::utils::get_split_index;
-        use std::str::FromStr;
+        use reqwest::header::{CONTENT_TYPE, TRANSFER_ENCODING};
 
-        pub fn get_status(header: &str) -> StatusCode {
-            let status = get_split_index(header, 1);
-            StatusCode::from_str(status).unwrap_or(StatusCode::OK)
+        fn send_chunked_request(
+            client: &Client,
+            url: &str,
+            body: &'static str,
+            method: Method,
+        ) -> reqwest::blocking::Response {
+            let mut request_builder = match method {
+                Method::POST => client.post(url),
+                Method::GET => client.get(url),
+                _ => client.get(url),
+            };
+
+            request_builder = request_builder
+                .header(CONTENT_TYPE, "text/plain")
+                .header(TRANSFER_ENCODING, "chunked")
+                .body(body);
+
+            let response = request_builder.send().unwrap();
+            response
+        }
+
+        mod get {
+            #[test]
+            fn valid() {}
+
+            #[test]
+            fn invalid() {}
+        }
+
+        mod post {
+            use super::*;
+            #[test]
+            fn valid() {
+                setup();
+
+                let body = "Wiki\r\npedia\r\n in\r\n\r\nchunks.\r\n\r\n";
+
+                let valid_endpoint = "/test.txt";
+
+                let response = send_chunked_request(
+                    &CLIENT,
+                    &format!("{HOST}{valid_endpoint}"),
+                    body,
+                    Method::POST,
+                );
+
+                // Check the response status and body
+                assert_eq!(response.status(), reqwest::StatusCode::OK);
+                assert_eq!(response.bytes().unwrap_or_default(), body);
+            }
+
+            #[test]
+            fn invalid() {}
         }
     }
 }

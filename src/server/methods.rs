@@ -11,13 +11,7 @@ pub fn get_method(req: &str) -> Result<Method, StatusCode> {
     let line = get_line(req, 0);
     let method = get_split_index(line, 0);
     // "GET /path2 HTTP/1.1" -> "GET"
-    match Method::from_str(method) {
-        Ok(method) => Ok(method),
-        Err(e) => {
-            log!(LogFileType::Server, format!("Error: {e}"));
-            Err(StatusCode::BAD_REQUEST)
-        }
-    }
+    Method::from_str(method).map_err(|_| StatusCode::BAD_REQUEST)
 }
 
 pub fn method_is_allowed(method: &Method, route: &Route) -> bool {
@@ -26,7 +20,7 @@ pub fn method_is_allowed(method: &Method, route: &Route) -> bool {
 
 pub fn handle_method(
     route: &Route,
-    req: &Request<String>,
+    req: &Request<Bytes>,
     config: &ServerConfig,
 ) -> Result<Response<Bytes>, StatusCode> {
     match *req.method() {
@@ -63,31 +57,10 @@ pub mod safe {
     ///
     /// Make sure you adjust this to get the desired behaviour for get requests.
     const STANDARD_HEADERS: [HeaderName; 1] = [TRANSFER_ENCODING];
-    pub fn get(
-        req: &Request<String>,
-        config: &ServerConfig,
-    ) -> Result<Response<Bytes>, StatusCode> {
-        let route = match get_route(req, config) {
-            Ok(route) => route,
-            _ => {
-                log!(
-                    LogFileType::Server,
-                    format!("Error: Path not found {}", req.uri().path())
-                );
-                return Err(StatusCode::NOT_FOUND);
-            }
-        };
+    pub fn get(req: &Request<Bytes>, config: &ServerConfig) -> Result<Response<Bytes>, StatusCode> {
+        let route = get_route(req, config).unwrap();
         let path = &add_root_to_path(&route, req.uri().path());
-        let body = match fs::read(path) {
-            Ok(bytes) => bytes,
-            Err(_) => {
-                log!(
-                    LogFileType::Server,
-                    format!("Error: Path does not exist {}", &path)
-                );
-                return Err(StatusCode::NOT_FOUND);
-            }
-        };
+        let body = fs::read(path).map_err(|_| StatusCode::NOT_FOUND)?;
 
         let mut resp = Response::builder()
             .version(req.version())
@@ -107,21 +80,12 @@ pub mod safe {
     }
 
     pub fn head(
-        req: &Request<String>,
+        req: &Request<Bytes>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
         let path = &add_root_to_path(route, req.uri().path());
-        let metadata = match fs::metadata(path) {
-            Ok(metadata) => metadata,
-            Err(e) => {
-                log!(
-                    LogFileType::Server,
-                    format!("Error: {e}. Could not get head for path '{}'", path)
-                );
-                return Err(StatusCode::INTERNAL_SERVER_ERROR);
-            }
-        };
+        let metadata = fs::metadata(path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         Response::builder()
             .version(req.version())
@@ -134,7 +98,7 @@ pub mod safe {
     }
 
     pub fn trace(
-        req: &Request<String>,
+        req: &Request<Bytes>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         // Check the Max-Forwards header
@@ -176,7 +140,7 @@ pub mod safe {
 
     pub fn options(
         route: &Route,
-        req: &Request<String>,
+        req: &Request<Bytes>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let allowed_methods = route
@@ -210,33 +174,19 @@ mod not_safe {
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     }
     pub fn post(
-        req: &Request<String>,
+        req: &Request<Bytes>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
-        let route = match get_route(req, config) {
-            Ok(route) => route,
-            _ => {
-                log!(
-                    LogFileType::Server,
-                    format!("Error: Path not found {}", req.uri().path())
-                );
-                return Err(StatusCode::NOT_FOUND);
-            }
-        };
+        let route = get_route(req, config).unwrap();
         let path = &add_root_to_path(&route, req.uri().path());
-        let body = req.body().as_bytes().to_vec();
+        let body = req.body().to_vec();
 
         let resp = unsafe_response(path, body.clone())?;
 
         // Resource does not exist, so create it.
         if fs::metadata(path).is_err() {
-            return match fs::write(path, body) {
-                Ok(_) => Ok(resp),
-                Err(e) => {
-                    log!(LogFileType::Server, format!("Error: {e}"));
-                    Err(StatusCode::BAD_REQUEST)
-                }
-            };
+            fs::write(path, body.clone()).map_err(|_| StatusCode::BAD_REQUEST)?;
+            return Ok(resp.clone());
         }
 
         let mut path = String::from(path);
@@ -251,78 +201,42 @@ mod not_safe {
             i += 1;
         }
 
-        match fs::write(&path, body) {
-            Ok(_) => Ok(resp),
-            Err(e) => {
-                log!(LogFileType::Server, format!("Error: {e}"));
-                Err(StatusCode::BAD_REQUEST)
-            }
-        }
+        fs::write(path, body.clone()).map_err(|_| StatusCode::BAD_REQUEST)?;
+        Ok(resp)
     }
 
-    pub fn put(
-        req: &Request<String>,
-        config: &ServerConfig,
-    ) -> Result<Response<Bytes>, StatusCode> {
+    pub fn put(req: &Request<Bytes>, config: &ServerConfig) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
         let path = &add_root_to_path(route, req.uri().path());
-        let body = req.body().as_bytes().to_vec();
+        let body = req.body().to_vec();
 
-        if let Err(e) = fs::write(path, &body) {
-            log!(LogFileType::Server, format!("Error: {e}"));
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
+        fs::write(path, &body).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         unsafe_response(path, body)
     }
 
     pub fn patch(
-        req: &Request<String>,
+        req: &Request<Bytes>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
         let path = &add_root_to_path(route, req.uri().path());
-        let body = req.body().as_bytes().to_vec();
+        let body = req.body().to_vec();
 
-        if fs::metadata(path).is_err() {
-            log!(
-                LogFileType::Server,
-                format!("Error: Bad request {:?}", &req)
-            );
-            return Err(StatusCode::NOT_FOUND);
-        }
-
-        if let Err(e) = fs::write(path, &body) {
-            log!(LogFileType::Server, format!("Error: {e}"));
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-
+        fs::metadata(path).map_err(|_| StatusCode::NOT_FOUND)?;
+        fs::write(path, &body).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         unsafe_response(path, body)
     }
 
     pub fn delete(
-        req: &Request<String>,
+        req: &Request<Bytes>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
         let route = &get_route(req, config).unwrap();
         let path = &add_root_to_path(route, req.uri().path());
-        let body = match fs::read(path) {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                log!(
-                    LogFileType::Server,
-                    format!("Failed to read body: {}. Error: {e}", &req.body())
-                );
-                return Err(StatusCode::NOT_FOUND);
-            }
-        };
-
+        let body = fs::read(path).map_err(|_| StatusCode::NOT_FOUND)?;
         if fs::remove_file(path).is_err() {
-            if let Err(e) = fs::remove_dir_all(path) {
-                log!(LogFileType::Server, format!("Error: {e}"));
-                return Err(StatusCode::INTERNAL_SERVER_ERROR);
-            }
+            fs::remove_dir_all(path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         }
-
         unsafe_response(path, body)
     }
 }

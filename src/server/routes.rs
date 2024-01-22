@@ -4,9 +4,10 @@ use crate::server::method_is_allowed;
 use crate::server::path::path_exists;
 use crate::server::redirections::is_redirect;
 use crate::server::{Request, Route, ServerConfig, StatusCode};
+use crate::type_aliases::Bytes;
 
 pub fn get_route<'a>(
-    req: &'a Request<String>,
+    req: &'a Request<Bytes>,
     config: &'a ServerConfig,
 ) -> Result<Route<'a>, (StatusCode, String)> {
     // Get the route assigned to the path
