@@ -16,7 +16,7 @@ fn test_update_cookie() {
         Method::POST,
         "",
         None,
-        Some(vec![("cookie", "grit:lab-cookie")]),
+        Some(vec![("cookie", "grit:lab=cookie")]),
     );
 
     let resp = update_cookie(req, conf).unwrap();
@@ -32,7 +32,7 @@ fn test_validate_cookie() {
         Method::POST,
         "",
         None,
-        Some(vec![(COOKIE.as_str(), "grit:lab-cookie")]),
+        Some(vec![(COOKIE.as_str(), "grit:lab=cookie")]),
     );
     let resp = validate_cookie(req, conf).unwrap();
 

@@ -2,7 +2,7 @@ use config::route::Settings;
 use http::StatusCode;
 use std::collections::HashMap;
 
-use crate::server::{update_cookie, validate_cookie, Cgi};
+use crate::server::{cookie_demo, update_cookie, validate_cookie, Cgi};
 pub use crate::server_config::*;
 pub fn server_config() -> Vec<ServerConfig<'static>> {
     vec![ServerConfig {
@@ -21,6 +21,12 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                 url_path: "/api/get-cookie",
                 methods: vec![http::Method::GET],
                 handler: Some(validate_cookie),
+                settings: None,
+            },
+            Route {
+                url_path: "/api/cookie-demo",
+                methods: vec![http::Method::GET],
+                handler: Some(cookie_demo),
                 settings: None,
             },
             Route {
