@@ -58,9 +58,16 @@ pub mod safe {
     /// Make sure you adjust this to get the desired behaviour for get requests.
     pub(crate) const STANDARD_HEADERS: [HeaderName; 1] = [TRANSFER_ENCODING];
     pub fn get(req: &Request<Bytes>, config: &ServerConfig) -> Result<Response<Bytes>, StatusCode> {
-        let route = get_route(req, config).unwrap();
+        let route = match get_route(req, config) {
+            Ok(r) => r,
+            Err((status_code, _)) => return Err(status_code),
+        };
+
         let path = &add_root_to_path(&route, req.uri().path());
-        let body = fs::read(path).map_err(|_| StatusCode::NOT_FOUND)?;
+        let body = match fs::read(path) {
+            Ok(b) => b,
+            Err(_) => return Err(StatusCode::NOT_FOUND),
+        };
 
         let mut resp = Response::builder()
             .version(req.version())

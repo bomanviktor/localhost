@@ -1,5 +1,7 @@
+use std::net::ToSocketAddrs;
+
 use crate::server::state::*;
-use crate::server::{Server, SocketAddr, TcpListener};
+use crate::server::{Server, TcpListener};
 use crate::server_config::ServerConfig;
 use crate::type_aliases::Port;
 
@@ -13,22 +15,30 @@ pub fn start(configs: Vec<ServerConfig<'static>>) {
 }
 
 fn bind_port(host: &str, port: &Port) -> Option<TcpListener> {
-    let address = format!("{}:{}", host, port);
-    let socket_addr = match address.parse::<SocketAddr>() {
-        Ok(address) => address,
-        Err(e) => {
-            eprintln!("Error: {e}. Unable to listen to: {address}");
-            return None;
-        }
-    };
+    // Use ToSocketAddrs to resolve the hostname to an IP address
+    let addresses = format!("{}:{}", host, port).to_socket_addrs();
 
-    match TcpListener::bind(socket_addr) {
-        Ok(listener) => {
-            println!("Server listening on {address}");
-            Some(listener)
+    match addresses {
+        Ok(mut addr_iter) => {
+            // Attempt to bind to the first resolved address
+            if let Some(socket_addr) = addr_iter.next() {
+                match TcpListener::bind(socket_addr) {
+                    Ok(listener) => {
+                        println!("Server listening on {}", socket_addr);
+                        Some(listener)
+                    }
+                    Err(e) => {
+                        eprintln!("Error: {e}. Unable to listen to: {}", socket_addr);
+                        None
+                    }
+                }
+            } else {
+                eprintln!("Error: No addresses resolved for {}:{}", host, port);
+                None
+            }
         }
         Err(e) => {
-            eprintln!("Error: {e}. Unable to listen to: {address}");
+            eprintln!("Error resolving address {}:{}. {e}", host, port);
             None
         }
     }

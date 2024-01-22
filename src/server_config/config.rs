@@ -6,7 +6,7 @@ use crate::server::{cookie_demo, update_cookie, validate_cookie, Cgi};
 pub use crate::server_config::*;
 pub fn server_config() -> Vec<ServerConfig<'static>> {
     vec![ServerConfig {
-        host: "127.0.0.1",
+        host: "localhost",
         ports: vec![8080, 8081, 8082],
         default_error_path: Some("/files/default_errors"),
         body_size_limit: 1000000000024,
