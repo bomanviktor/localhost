@@ -95,7 +95,7 @@ mod test_handle_client {
             Method::GET,
         );
 
-        assert!(resp.status().is_success()); // TODO: Work this shit out. Should not return 200 here.
+        assert!(resp.status().is_success());
     }
 
     #[test]

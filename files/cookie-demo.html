@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cookie Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+
+        #cookie-status {
+            margin-bottom: 15px;
+        }
+
+        button {
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="cookie-status">...</div>
+    <button id="update-cookie-btn">Update Cookie</button>
+    <button id="get-cookie-btn">Check for session</button>
+
+    <script>
+        const cookieStatus = document.getElementById("cookie-status");
+        document.getElementById("update-cookie-btn").addEventListener("click", () => {
+            setCookie()
+        })
+
+        document.getElementById("get-cookie-btn").addEventListener("click", () => {
+            getCookie()
+        })
+
+        async function getCookie() {
+            const resp = await fetch('/api/get-cookie', { method: 'GET' });
+            if (resp.ok) {
+                alert("Has session.");
+            } else {
+                alert("No session.")
+            }
+
+        }
+
+        async function setCookie() {
+            await fetch('/api/update-cookie', { method: 'POST' });
+            if (document.cookie) {
+                cookieStatus.innerText = 'Cookie was set.';
+            } else {
+                cookieStatus.innerText = 'Cookie was removed.';
+            }
+        }
+    </script>
+</body>
+</html>

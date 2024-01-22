@@ -56,7 +56,7 @@ pub mod safe {
     /// # STANDARD_HEADERS
     ///
     /// Make sure you adjust this to get the desired behaviour for get requests.
-    const STANDARD_HEADERS: [HeaderName; 1] = [TRANSFER_ENCODING];
+    pub(crate) const STANDARD_HEADERS: [HeaderName; 1] = [TRANSFER_ENCODING];
     pub fn get(req: &Request<Bytes>, config: &ServerConfig) -> Result<Response<Bytes>, StatusCode> {
         let route = get_route(req, config).unwrap();
         let path = &add_root_to_path(&route, req.uri().path());
