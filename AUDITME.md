@@ -77,14 +77,14 @@ You can simulate this by changing body_size_limit in the serverconfig for exampl
 Example route: 
 
 ``` Route { 
-url_path: "/mega-dir", 
+url_path: "/files", 
 methods: vec![http::Method::GET], 
 handler: None, 
 settings: Some(Settings { 
 http_redirections: None, 
 redirect_status_code: None, 
-root_path: Some("/files"), 
-default_if_url_is_dir: Some("/dir.html"), 
+root_path: None, 
+default_if_url_is_dir: Some("/files/dir.html"), 
 default_if_request_is_dir: None, 
 cgi_def: None, 
 list_directory: false, 
