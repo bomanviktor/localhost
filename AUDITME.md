@@ -29,8 +29,8 @@ Mmmyeesss
 
 ## If an error is returned by the previous functions on a socket, is the client removed? 
 
-If the function "handle connection" returns an error that is not WouldBlock ( -> re-register) 
-We log the error and remove the client 
+If the error is of the blocking kind, we keep the connection and move on to the next iteration in our management loop.
+If the error is something else, we consider it non-recoverable and deregister the client.
 
 ## Is writing and reading ALWAYS done through a select (or equivalent)? 
 
