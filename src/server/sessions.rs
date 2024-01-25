@@ -14,7 +14,7 @@ pub fn update_cookie(
 ) -> Result<Response<Bytes>, StatusCode> {
     if req.headers().iter().any(|(_, v)| {
         v.to_str()
-            .unwrap()
+            .unwrap_or_default()
             .to_ascii_lowercase()
             .eq("grit:lab=cookie")
     }) {

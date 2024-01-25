@@ -60,7 +60,7 @@ pub fn execute_cgi_script(
 ) -> Result<Response<Bytes>, StatusCode> {
     let route = match get_route(req, config) {
         Ok(route) => route,
-        Err((status, _)) => return Err(status), 
+        Err((status, _)) => return Err(status),
     };
 
     let settings = match &route.settings {
