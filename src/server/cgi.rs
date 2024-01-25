@@ -58,7 +58,11 @@ pub fn execute_cgi_script(
     req: &Request<Bytes>,
     config: &ServerConfig,
 ) -> Result<Response<Bytes>, StatusCode> {
-    let route = &get_route(req, config).unwrap();
+    let route = match get_route(req, config) {
+        Ok(route) => route,
+        Err((status, _)) => return Err(status), 
+    };
+
     let settings = match &route.settings {
         Some(s) => s,
         None => return Err(StatusCode::BAD_REQUEST),
@@ -68,7 +72,7 @@ pub fn execute_cgi_script(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let full_path = add_root_to_path(route, req.uri().path());
+    let full_path = add_root_to_path(&route, req.uri().path());
     let body = match String::from_utf8(req.body().clone()) {
         Ok(b) => b,
         Err(_) => return Err(StatusCode::BAD_REQUEST),
