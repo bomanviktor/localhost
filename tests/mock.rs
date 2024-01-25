@@ -51,7 +51,7 @@ pub fn mock_server_config() -> ServerConfig<'static> {
     let config = ServerConfig {
         host: "127.0.0.1",
         ports: vec![8080],
-        default_error_path: None,
+        custom_error_path: None,
         body_size_limit: 10024,
         routes: vec![
             Route {

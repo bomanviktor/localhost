@@ -17,6 +17,8 @@ mod test_config {
 }
 mod test_handle_client {
     use lazy_static::lazy_static;
+    use std::thread;
+    use std::time::Duration;
     const HOST: &str = "http://127.0.0.1:8080";
     lazy_static! {
         static ref CLIENT: Client = Client::new();
@@ -111,6 +113,7 @@ mod test_handle_client {
         );
 
         assert!(resp.status().is_success());
+        thread::sleep(Duration::from_secs(1));
 
         // Attempt to get a cookie we don't have.
         let invalid_endpoint = "/api/get-cookie";
