@@ -1,10 +1,17 @@
+use std::net::ToSocketAddrs;
+use std::process::exit;
+
 use crate::server::state::*;
-use crate::server::{Server, SocketAddr, TcpListener};
+use crate::server::{Server, TcpListener};
 use crate::server_config::ServerConfig;
 use crate::type_aliases::Port;
 
 pub fn start(configs: Vec<ServerConfig<'static>>) {
     let servers = get_servers(configs);
+    if servers.is_empty() {
+        eprintln!("No servers were added. Exit program.");
+        exit(1);
+    }
     let mut s = ServerState::init(servers);
     loop {
         s.poll();
@@ -13,30 +20,33 @@ pub fn start(configs: Vec<ServerConfig<'static>>) {
 }
 
 fn bind_port(host: &str, port: &Port) -> Option<TcpListener> {
-    let address = format!("{}:{}", host, port);
-    let socket_addr = match address.parse::<SocketAddr>() {
-        Ok(address) => address,
+    // Use ToSocketAddrs to resolve the hostname to an IP address
+    let host_and_port = format!("{host}:{port}");
+    let mut addresses = match host_and_port.to_socket_addrs() {
+        Ok(addr) => addr,
         Err(e) => {
-            eprintln!("Error: {e}. Unable to listen to: {address}");
+            eprintln!("Error resolving address {host}:{port}. {e}");
             return None;
         }
     };
 
-    match TcpListener::bind(socket_addr) {
-        Ok(listener) => {
-            println!("Server listening on {address}");
-            Some(listener)
-        }
-        Err(e) => {
-            eprintln!("Error: {e}. Unable to listen to: {address}");
-            None
-        }
+    if let Some(socket_addr) = addresses.next() {
+        return match TcpListener::bind(socket_addr) {
+            Ok(listener) => {
+                println!("Server listening on {host_and_port}");
+                Some(listener)
+            }
+            Err(e) => {
+                eprintln!("Error: {e}. Unable to listen to: {host_and_port}");
+                None
+            }
+        };
     }
+    None
 }
 
 pub fn get_servers(configs: Vec<ServerConfig<'static>>) -> Vec<Server<'static>> {
     let mut servers = Vec::new();
-
     for config in configs {
         if config.ports.is_empty() {
             eprintln!(
