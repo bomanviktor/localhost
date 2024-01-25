@@ -1,4 +1,5 @@
 use std::net::ToSocketAddrs;
+use std::process::exit;
 
 use crate::server::state::*;
 use crate::server::{Server, TcpListener};
@@ -7,6 +8,10 @@ use crate::type_aliases::Port;
 
 pub fn start(configs: Vec<ServerConfig<'static>>) {
     let servers = get_servers(configs);
+    if servers.is_empty() {
+        eprintln!("No servers were added. Exit program.");
+        exit(1);
+    }
     let mut s = ServerState::init(servers);
     loop {
         s.poll();
@@ -16,37 +21,32 @@ pub fn start(configs: Vec<ServerConfig<'static>>) {
 
 fn bind_port(host: &str, port: &Port) -> Option<TcpListener> {
     // Use ToSocketAddrs to resolve the hostname to an IP address
-    let addresses = format!("{}:{}", host, port).to_socket_addrs();
+    let host_and_port = format!("{host}:{port}");
+    let mut addresses = match host_and_port.to_socket_addrs() {
+        Ok(addr) => addr,
+        Err(e) => {
+            eprintln!("Error resolving address {host}:{port}. {e}");
+            return None;
+        }
+    };
 
-    match addresses {
-        Ok(mut addr_iter) => {
-            // Attempt to bind to the first resolved address
-            if let Some(socket_addr) = addr_iter.next() {
-                match TcpListener::bind(socket_addr) {
-                    Ok(listener) => {
-                        println!("Server listening on {}", socket_addr);
-                        Some(listener)
-                    }
-                    Err(e) => {
-                        eprintln!("Error: {e}. Unable to listen to: {}", socket_addr);
-                        None
-                    }
-                }
-            } else {
-                eprintln!("Error: No addresses resolved for {}:{}", host, port);
+    if let Some(socket_addr) = addresses.next() {
+        return match TcpListener::bind(socket_addr) {
+            Ok(listener) => {
+                println!("Server listening on {host_and_port}");
+                Some(listener)
+            }
+            Err(e) => {
+                eprintln!("Error: {e}. Unable to listen to: {host_and_port}");
                 None
             }
-        }
-        Err(e) => {
-            eprintln!("Error resolving address {}:{}. {e}", host, port);
-            None
-        }
+        };
     }
+    None
 }
 
 pub fn get_servers(configs: Vec<ServerConfig<'static>>) -> Vec<Server<'static>> {
     let mut servers = Vec::new();
-
     for config in configs {
         if config.ports.is_empty() {
             eprintln!(
