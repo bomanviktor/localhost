@@ -92,7 +92,7 @@ mod tests {
         let server_config = ServerConfig {
             host: "127.0.0.1",
             ports: vec![],
-            default_error_path: None,
+            custom_error_path: None,
             body_size_limit: 0,
             routes: vec![],
         };

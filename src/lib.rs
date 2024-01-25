@@ -15,7 +15,7 @@ pub mod server_config {
     pub struct ServerConfig<'a> {
         pub host: &'a str,
         pub ports: Vec<Port>,
-        pub default_error_path: Option<Path<'a>>,
+        pub custom_error_path: Option<Path<'a>>,
         pub body_size_limit: usize,
         pub routes: Vec<Route<'a>>,
     }

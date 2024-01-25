@@ -153,8 +153,43 @@ pub mod errors {
             .unwrap()
     }
 
+    fn generate_error_html(code: u16, name: &str) -> String {
+        format!(
+            r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{code} {name}</title>
+    <style>
+        body {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }}
+
+        h1 {{
+            text-align: center;
+            font-size: xxx-large;
+            font-family: sans-serif;
+        }}
+    </style>
+</head>
+<body>
+<h1>{code} | {name}</h1>
+</body>
+</html>"#,
+        )
+    }
+
     fn check_errors(code: StatusCode, config: &ServerConfig) -> std::io::Result<Bytes> {
-        let error_path = config.default_error_path.unwrap_or("/files/default_errors");
-        fs::read(format!(".{error_path}/{}.html", code.as_u16()))
+        if let Some(custom_error_path) = config.custom_error_path {
+            fs::read(format!(".{custom_error_path}/{}.html", code.as_u16()))
+        } else {
+            let name = code.canonical_reason().unwrap_or_default();
+            let code = code.as_u16();
+            Ok(Bytes::from(generate_error_html(code, name)))
+        }
     }
 }

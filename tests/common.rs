@@ -1,5 +1,6 @@
 use lazy_static::lazy_static;
-use localhost::log::init_logs;
+use localhost::log;
+use localhost::log::{init_logs, LogFileType};
 use localhost::server::{content_type, start};
 use localhost::server_config::server_config;
 use reqwest::blocking::Client;
@@ -50,7 +51,17 @@ pub fn send_request(
         .header(CONTENT_TYPE, content_type(url))
         .body(body);
 
-    let response = request_builder.send().unwrap();
+    let debug_info = request_builder.try_clone().expect("Body is a stream.");
+    let response = match request_builder.send() {
+        Ok(r) => r,
+        Err(e) => {
+            log!(
+                LogFileType::Server,
+                format!("Test failed {e}. Request builder: {debug_info:?}")
+            );
+            panic!("Test failed {e}. Request builder: {debug_info:?}");
+        }
+    };
     response
 }
 pub fn get_buffer(path: &str) -> Vec<u8> {
