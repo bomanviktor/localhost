@@ -163,6 +163,41 @@ fn replace_path_in_request(head: String, path: &str, default_path: &str) -> Stri
     };
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replace_path_with_stripped_prefix() {
+        let head = "GET /old_path HTTP/1.1\r\n".to_string();
+        let path = "./old_path";
+        let default_path = "/new_path";
+
+        let result = replace_path_in_request(head, path, default_path);
+        assert_eq!(result, "GET new_path HTTP/1.1\r\n");
+    }
+
+    #[test]
+    fn replace_path_without_stripped_prefix() {
+        let head = "POST /old_path HTTP/1.1\r\n".to_string();
+        let path = "/old_path";
+        let default_path = "/new_path";
+
+        let result = replace_path_in_request(head, path, default_path);
+        assert_eq!(result, "POST new_path HTTP/1.1\r\n");
+    }
+
+    #[test]
+    fn replace_path_not_found() {
+        let head = "PUT /another_path HTTP/1.1\r\n".to_string();
+        let path = "/old_path";
+        let default_path = "/new_path";
+
+        let result = replace_path_in_request(head, path, default_path);
+        assert_eq!(result, "PUT /another_path HTTP/1.1\r\n");
+    }
+}
+
 mod serve {
     use crate::server::format_response;
     use crate::type_aliases::Bytes;

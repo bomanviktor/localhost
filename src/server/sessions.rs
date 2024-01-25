@@ -40,21 +40,6 @@ pub fn update_cookie(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
-pub fn set_cookie_handler(
-    req: &Request<Bytes>,
-    conf: &ServerConfig,
-) -> Result<Response<Bytes>, StatusCode> {
-    set_cookie(
-        Response::builder()
-            .status(StatusCode::OK)
-            .version(req.version()),
-        "grit:lab=cookie",
-    )
-    .header(HOST, conf.host)
-    .body(vec![])
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
-}
-
 pub fn validate_cookie(
     req: &Request<Bytes>,
     conf: &ServerConfig,
