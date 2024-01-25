@@ -90,8 +90,11 @@ pub mod safe {
         req: &Request<Bytes>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
-        let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, req.uri().path());
+        let route = match get_route(req, config) {
+            Ok(route) => route,
+            Err((status, _)) => return Err(status),
+        };
+        let path = &add_root_to_path(&route, req.uri().path());
         let metadata = fs::metadata(path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         Response::builder()
@@ -184,7 +187,10 @@ mod not_safe {
         req: &Request<Bytes>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
-        let route = get_route(req, config).unwrap();
+        let route = match get_route(req, config) {
+            Ok(route) => route,
+            Err((status, _)) => return Err(status),
+        };
         let path = &add_root_to_path(&route, req.uri().path());
         let body = req.body().to_vec();
 
@@ -213,8 +219,11 @@ mod not_safe {
     }
 
     pub fn put(req: &Request<Bytes>, config: &ServerConfig) -> Result<Response<Bytes>, StatusCode> {
-        let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, req.uri().path());
+        let route = match get_route(req, config) {
+            Ok(route) => route,
+            Err((status, _)) => return Err(status),
+        };
+        let path = &add_root_to_path(&route, req.uri().path());
         let body = req.body().to_vec();
 
         fs::write(path, &body).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -225,8 +234,11 @@ mod not_safe {
         req: &Request<Bytes>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
-        let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, req.uri().path());
+        let route = match get_route(req, config) {
+            Ok(route) => route,
+            Err((status, _)) => return Err(status),
+        };
+        let path = &add_root_to_path(&route, req.uri().path());
         let body = req.body().to_vec();
 
         fs::metadata(path).map_err(|_| StatusCode::NOT_FOUND)?;
@@ -238,8 +250,11 @@ mod not_safe {
         req: &Request<Bytes>,
         config: &ServerConfig,
     ) -> Result<Response<Bytes>, StatusCode> {
-        let route = &get_route(req, config).unwrap();
-        let path = &add_root_to_path(route, req.uri().path());
+        let route = match get_route(req, config) {
+            Ok(route) => route,
+            Err((status, _)) => return Err(status),
+        };
+        let path = &add_root_to_path(&route, req.uri().path());
         let body = fs::read(path).map_err(|_| StatusCode::NOT_FOUND)?;
         if fs::remove_file(path).is_err() {
             fs::remove_dir_all(path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

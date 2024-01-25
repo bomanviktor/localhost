@@ -184,7 +184,7 @@ pub mod headers {
         }
 
         if let Some(header) = headers.unwrap().get(TRANSFER_ENCODING) {
-            header.to_str().unwrap() == "chunked"
+            header.to_str().unwrap_or_default() == "chunked"
         } else {
             false
         }

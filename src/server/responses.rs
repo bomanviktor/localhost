@@ -44,7 +44,7 @@ fn is_chunked(head: http::response::Parts) -> bool {
     head.headers
         .get_all(TRANSFER_ENCODING)
         .iter()
-        .any(|value| value.to_str().unwrap().to_uppercase() == "CHUNKED")
+        .any(|value| value.to_str().unwrap_or_default().to_uppercase() == "CHUNKED")
 }
 
 pub fn content_type(path: &str) -> String {

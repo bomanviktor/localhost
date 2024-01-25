@@ -53,7 +53,9 @@ pub fn log_with_file_line(
     let mut message = String::new();
     let now = Local::now();
     write!(message, "[{}]", now.format("%d/%m/%y %H:%M:%S")).unwrap();
-    write!(message, "[{}:{}] ", file_source, line_number).unwrap();
+    if write!(message, "[{}:{}] ", file_source, line_number).is_err() {
+        message.push_str("[Error writing file source and line]");
+    }
     writeln!(message, "{}", log_message).unwrap();
 
     let mut file = match OpenOptions::new().create(true).append(true).open(log_file) {
