@@ -1,8 +1,7 @@
 use std::net::ToSocketAddrs;
 use std::process::exit;
 
-use crate::server::state::*;
-use crate::server::{Server, TcpListener};
+use crate::server::{Server, ServerState, TcpListener};
 use crate::server_config::ServerConfig;
 use crate::type_aliases::Port;
 

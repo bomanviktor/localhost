@@ -9,17 +9,32 @@ use std::os::fd::{AsRawFd, FromRawFd};
 #[cfg(windows)]
 use std::os::windows::io::{AsRawSocket, FromRawSocket};
 use std::time::Duration;
+use std::time::Instant;
 
-pub type Connection<'a> = (TcpStream, Arc<ServerConfig<'a>>);
-
-pub struct ServerState<'a> {
-    pub poll: Poll,
-    pub events: Events,
-    pub token_id: usize,
-    pub listeners: Vec<Listener<'a>>,
-    pub connections: HashMap<Token, Connection<'a>>,
-}
 pub const INITIAL_TOKEN_ID: usize = 0;
+
+struct Connection<'a> {
+    stream: TcpStream,
+    config: Arc<ServerConfig<'a>>,
+    last_activity: Instant,
+}
+
+impl<'a> Connection<'a> {
+    fn new(stream: TcpStream, config: Arc<ServerConfig<'a>>) -> Self {
+        Self {
+            stream,
+            config,
+            last_activity: Instant::now(),
+        }
+    }
+}
+pub struct ServerState<'a> {
+    poll: Poll,
+    events: Events,
+    token_id: usize,
+    listeners: Vec<Listener<'a>>,
+    connections: HashMap<Token, Connection<'a>>,
+}
 impl ServerState<'_> {
     pub fn init(servers: Vec<Server<'static>>) -> ServerState<'static> {
         let poll = Poll::new().expect("Failed to create Poll instance");
@@ -62,8 +77,10 @@ impl ServerState<'_> {
 
     pub fn poll(&mut self) {
         self.poll
-            .poll(&mut self.events, None) // Maybe add timeout for poll here?
+            .poll(&mut self.events, Some(Duration::from_millis(5000)))
             .expect("Poll failed");
+
+        self.handle_timeout();
     }
 
     pub fn handle_events(&mut self) {
@@ -79,18 +96,36 @@ impl ServerState<'_> {
             handle_existing_connection(&self.poll, event.token(), &mut self.connections);
         }
     }
+
+    fn handle_timeout(&mut self) {
+        let now = Instant::now();
+        let timeout_duration = Duration::from_millis(1000);
+
+        // Remove connections that timed out from `connections` HashMap
+        self.connections.retain(|_, conn| {
+            if now.duration_since(conn.last_activity) > timeout_duration {
+                self.poll
+                    .registry()
+                    .deregister(&mut conn.stream)
+                    .expect("Failed to deregister stream due to timeout");
+                false
+            } else {
+                true
+            }
+        });
+    }
 }
 
 fn accept_connection<'a>(
     poll: &Poll,
     token_id: &mut usize,
     listener: &Listener<'a>,
-    connections: &mut HashMap<Token, (TcpStream, Arc<ServerConfig<'a>>)>,
+    connections: &mut HashMap<Token, Connection<'a>>,
 ) -> bool {
     match listener.accept() {
         Ok((mut stream, _)) => {
             let linger_duration = match std::env::consts::OS {
-                "macos" => Some(Duration::from_millis(1000)),
+                "macos" => Some(Duration::from_millis(100)),
                 _ => None,
             };
 
@@ -107,7 +142,10 @@ fn accept_connection<'a>(
                 .register(&mut stream, connection_token, Interest::READABLE)
                 .expect("Failed to register new connection");
 
-            connections.insert(connection_token, (stream, Arc::clone(&listener.config)));
+            connections.insert(
+                connection_token,
+                Connection::new(stream, Arc::clone(&listener.config)),
+            );
 
             true
         }
@@ -125,8 +163,7 @@ fn handle_existing_connection(
         None => return,
     };
 
-    let (stream, conf) = connection;
-    if let Err(e) = crate::server::handle_connection(stream, conf) {
+    if let Err(e) = crate::server::handle_connection(&mut connection.stream, &connection.config) {
         match e.kind() {
             ErrorKind::WouldBlock => {
                 return; // Therefore, we keep the connection registered and return
@@ -136,7 +173,7 @@ fn handle_existing_connection(
     }
 
     poll.registry()
-        .deregister(stream)
+        .deregister(&mut connection.stream)
         .expect("Failed to deregister stream");
     connections.remove(&token);
 }
