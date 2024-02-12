@@ -70,10 +70,68 @@ pub fn server_config() -> Vec<ServerConfig<'static>> {
                     default_if_request_is_dir: None,
                 }),
             },
-            // Define more routes as needed, specifying paths, methods, handlers, and settings for each.
-            // The 'settings' field allows detailed configuration of route behavior, including CGI processing,
-            // directory listing, HTTP redirections, and handling of requests to directories.
-            // Customize each route according to the specific requirements of your application or website.
+            Route {
+                url_path: "/test.txt",
+                methods: vec![http::Method::GET, http::Method::POST],
+                handler: None,
+                settings: Some(Settings {
+                    http_redirections: Some(vec!["/redirection-test"]),
+                    redirect_status_code: Some(StatusCode::from_u16(301).unwrap()),
+                    root_path: Some("/files"),
+                    default_if_url_is_dir: None,
+                    default_if_request_is_dir: None,
+                    cgi_def: None,
+                    list_directory: false,
+                }),
+            },
+            Route {
+                url_path: "/mega-dir",
+                methods: vec![http::Method::GET],
+                handler: None,
+                settings: Some(Settings {
+                    http_redirections: None,
+                    redirect_status_code: None,
+                    root_path: Some("/files"),
+                    default_if_url_is_dir: Some("/dir.html"),
+                    default_if_request_is_dir: None,
+                    cgi_def: None,
+                    list_directory: false,
+                }),
+            },
+            Route {
+                url_path: "/src",
+                methods: vec![http::Method::GET],
+                handler: None,
+                settings: Some(Settings {
+                    http_redirections: None,
+                    redirect_status_code: None,
+                    root_path: None,
+                    default_if_url_is_dir: Some("/does-not-exist-mate"),
+                    default_if_request_is_dir: None,
+                    cgi_def: None,
+                    list_directory: false,
+                }),
+            },
+            Route {
+                url_path: "/files",
+                methods: vec![
+                    http::Method::GET,
+                    http::Method::POST,
+                    http::Method::PUT,
+                    http::Method::PATCH,
+                    http::Method::DELETE,
+                ],
+                handler: None,
+                settings: Some(Settings {
+                    http_redirections: None,
+                    redirect_status_code: None,
+                    root_path: None,
+                    default_if_url_is_dir: None,
+                    default_if_request_is_dir: None,
+                    cgi_def: None,
+                    list_directory: true,
+                }),
+            },
         ],
     }]
 }
