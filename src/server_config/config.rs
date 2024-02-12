@@ -8,7 +8,7 @@ pub use crate::server_config::*;
 // Function to configure the server settings
 pub fn server_config() -> Vec<ServerConfig<'static>> {
     vec![ServerConfig {
-        // IP address where the server listens. 
+        // IP address where the server listens.
         // Change "127.0.0.1" to your server's IP address if needed.
         host: "127.0.0.1",
 
